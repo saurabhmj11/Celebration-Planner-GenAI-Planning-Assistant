@@ -134,3 +134,29 @@ Stage Summary:
 - Hybrid-AI architecture worth highlighting in the submission: deterministic algorithm computes the ranked shortlist → GenAI enriches it with personalization grounded to the real catalog (hallucinated venue ids are dropped server-side) → offline engine covers outages; every recommendation is explainable via on-card score breakdowns.
 - Key files: src/lib/venues/recommender.ts, src/data/venues.js, src/components/venues/{VenueFinder,VenueCard,VenueMap}.jsx + venueMap.css, src/lib/validation/assistSchemas.ts + src/lib/ai/assist/tasks.ts + src/app/api/ai/assist/route.ts (venue-recommend task), src/services/{aiAssist,assistOffline}.js, EventFormModal.jsx (smart matches panel), Navbar/PlannerApp/QuickActionGrid (tab wiring), public/venues/*.webp (32 photos), tests/venues/recommender.test.ts + extended assist-route/offline suites.
 - Verification artifacts: scripts/venue-*.png, scripts/venue-map-zoom*.png, scripts/venue-mobile-390.png, scripts/vlm-venue-*.json, scripts/vlm-hover.json, scripts/vlm-final-venue.json, scripts/vlm-pristine2.json.
+
+---
+Task ID: 6
+Agent: Main agent (Z.ai)
+Task: Fix the UI of the "Create New Celebration" modal (user screenshot showed the new-event form with the Smart Venue Matches panel).
+
+Work Log:
+- Audited the user's uploaded screenshot with VLM (glm-5v-turbo): found venue-name truncation on the top recommendation ("Rosewood Botanical Gard…"), awkward two-line wrap on the "Charity Gala / Corporate" chip with uneven chip-row heights (54 vs 58px), cramped Smart Venue Matches panel with low-contrast micro-text, mismatched date/time input heights (42 vs 43px), confusing price/capacity color hierarchy, over-long location placeholder, "Total Budget ($)" label awkwardness, and unlabeled inputs (no htmlFor/id).
+- Confirmed every issue with DOM measurements in the live app (agent-browser eval): cards 184px wide → top venue name scrollWidth > clientWidth (truncated); chip heights 54/54/54/58/58/58; modal 672px.
+- Rewrote `src/components/events/EventFormModal.jsx`:
+  - Modal widened max-w-2xl → max-w-3xl (venue cards 216px, chips 227px — "Charity Gala / Corporate" fits on one line at desktop).
+  - Event-type chips: uniform min-h-14 (56px everywhere), items-center, leading-snug labels — verified 56/56/56/56/56/56 at desktop AND 390px mobile.
+  - Venue cards: line-clamp-2 names with min-h (full "Rosewood Botanical Garden Oasis" visible — truncation false), price now the hero line (emerald bold), capacity + venue-type chip secondary (slate), scoreTone badge mirrored from the VenueFinder tab (emerald ≥85 / amber ≥70 / slate), per-venue warning badge ("check fit" + title/aria tooltip with the algorithm's warning), hover lift + image zoom, chosen state keeps emerald ring + check overlay.
+  - Smart Venue Matches panel restructured: title + "AI-ranked live" badge on one row; readable context line with live values ("Ranked for a wedding with 75 guests on about $3,500 for the venue (35% of budget)…"); footer hint upgraded to amber-800 readable copy.
+  - Field flow reordered for narrative logic: Type → Title → Date/Time → Guests/Budget → Location → Smart Venue Matches (the panel now sits right under the fields that drive its ranking) → Vision → Actions.
+  - Inputs normalized to shared h-11 (44px) classes — all six inputs verified 44px (was 42/43/46 mix); $ prefix adornment inside the budget input; "Total Budget" label; location placeholder shortened; placeholders darkened to slate-400; Time labeled "optional" to resolve the required-marker inconsistency.
+  - A11y hardening: htmlFor/id on all 7 fields, aria-required/aria-invalid/aria-describedby + role=alert error wiring, aria-pressed on chips and venue cards, decorative icons aria-hidden, richer aria-label on venue cards ("name, N% match, estimated $X"), focus-visible rings on every interactive control.
+  - Functional touch: picking a venue now clears a stale location validation error instantly.
+- E2E verification (agent-browser): reopened the modal at 1440/1280 — chips all 56px, no truncation, inputs all 44px, modal 768px, zero viewport overflow; switched type to Charity Gala → matches re-ranked (Riverside Community Pavilion surfaced); clicked a card → Location auto-filled + chosen ring rendered; empty-title submit → "Event title is required." alert shown; mobile 390px — modal 358px, cards stack full-width (274px), chips uniform, pageScrollWidth 390 (no horizontal overflow); no console/page errors; localStorage sample data confirmed pristine (3 original events) after testing.
+- VLM re-review of the after screenshot: all 5 originally-reported issues confirmed FIXED, polish 8/10 (residual notes were non-issues: standard translucent scrim, Next.js dev badge, per-venue warning badges).
+- Quality gates: `bun run lint` clean; `bun test` 170/170 pass.
+
+Stage Summary:
+- Fixed: the new-event modal now shows full venue names (no ellipsis on the top AI recommendation), uniform event-type chips at every viewport, a readable self-explaining Smart Venue Matches panel with clear price/capacity hierarchy and per-venue warnings, uniform 44px inputs, $-adorned budget field, reordered field flow that matches the AI-ranking narrative, and full label/error ARIA wiring.
+- Key file: src/components/events/EventFormModal.jsx (UI rewrite; props/API unchanged).
+- Verification artifacts: scripts/uifix-before-1440.png, scripts/uifix-after-1440.png, scripts/uifix-after-chosen.png, scripts/uifix-after-errors.png, scripts/uifix-after-mobile390.png, scripts/vlm-uifix-analysis.json, scripts/vlm-uifix-after.json.
