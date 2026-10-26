@@ -68,7 +68,7 @@ export const TimelineView = ({ onOpenTaskModal, onEditTask }) => {
             <h2 className="text-2xl sm:text-3xl font-display font-extrabold text-slate-900">
               Event Timeline & Milestones
             </h2>
-            <span className="px-3 py-1 rounded-full text-xs font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
+            <span className="px-3 py-1 rounded-full text-xs font-bold bg-brand-50 text-brand-800 border border-brand-200">
               {completedTasks} / {totalTasks} Completed
             </span>
           </div>
@@ -79,7 +79,7 @@ export const TimelineView = ({ onOpenTaskModal, onEditTask }) => {
 
         <button
           onClick={onOpenTaskModal}
-          className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-2xl bg-gradient-to-r from-indigo-600 to-brand-600 hover:from-indigo-700 hover:to-brand-700 text-white font-bold text-xs shadow-lg shadow-indigo-500/25 transition-all shrink-0"
+          className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-2xl bg-gradient-to-r from-brand-600 to-fuchsia-600 hover:from-brand-700 hover:to-fuchsia-700 text-white font-bold text-xs shadow-lg shadow-brand-500/25 transition-all shrink-0"
         >
           <Plus className="w-4 h-4" />
           <span>Add Milestone Task</span>
@@ -93,11 +93,11 @@ export const TimelineView = ({ onOpenTaskModal, onEditTask }) => {
             <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
               Milestone Completion Rate
             </span>
-            <span className="text-sm font-extrabold text-indigo-600">{progressPct}%</span>
+            <span className="text-sm font-extrabold text-brand-700">{progressPct}%</span>
           </div>
           <div className="w-full bg-slate-100 rounded-full h-3 overflow-hidden">
             <div
-              className="bg-gradient-to-r from-brand-600 to-indigo-600 h-full rounded-full transition-all duration-700"
+              className="bg-gradient-to-r from-brand-600 to-fuchsia-600 h-full rounded-full transition-all duration-700"
               style={{ width: `${progressPct}%` }}
             />
           </div>
@@ -164,7 +164,7 @@ export const TimelineView = ({ onOpenTaskModal, onEditTask }) => {
               <button
                 onClick={() => setSelectedStatus('pending')}
                 className={`px-2.5 py-1 rounded-lg font-bold transition-all ${
-                  selectedStatus === 'pending' ? 'bg-white shadow-sm text-indigo-700' : 'text-slate-600'
+                  selectedStatus === 'pending' ? 'bg-white shadow-sm text-brand-800' : 'text-slate-600'
                 }`}
               >
                 Pending
@@ -315,7 +315,7 @@ export const TimelineView = ({ onOpenTaskModal, onEditTask }) => {
                               <button
                                 onClick={() => onEditTask(task)}
                                 title="Edit Task"
-                                className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                                className="p-1.5 text-slate-400 hover:text-brand-700 hover:bg-brand-50 rounded-lg transition-colors"
                               >
                                 <Edit2 className="w-3.5 h-3.5" />
                               </button>

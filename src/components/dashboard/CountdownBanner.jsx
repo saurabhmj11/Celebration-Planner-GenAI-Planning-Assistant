@@ -1,8 +1,35 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, memo } from 'react';
+import { Calendar, MapPin, Users, Pencil, Sparkles } from 'lucide-react';
 import { EVENT_TYPES } from '../../data/defaultData';
-import { Calendar, MapPin, Users, Edit3, Sparkles } from 'lucide-react';
+import { formatEventDate } from '../../utils/formatters';
 
-export const CountdownBanner = ({ event, onEditEvent, onOpenAiStudio }) => {
+/**
+ * Event-type-aware hero gradients so each celebration category feels distinct.
+ */
+const TYPE_THEMES = {
+  wedding: {
+    gradient: 'from-rose-950 via-fuchsia-950 to-slate-950',
+    glowA: 'bg-rose-500/25',
+    glowB: 'bg-amber-500/15',
+  },
+  birthday: {
+    gradient: 'from-violet-950 via-brand-950 to-fuchsia-950',
+    glowA: 'bg-brand-500/25',
+    glowB: 'bg-pink-500/15',
+  },
+  community: {
+    gradient: 'from-emerald-950 via-teal-950 to-slate-950',
+    glowA: 'bg-emerald-500/25',
+    glowB: 'bg-cyan-500/15',
+  },
+  other: {
+    gradient: 'from-slate-900 via-brand-950 to-fuchsia-950',
+    glowA: 'bg-brand-500/20',
+    glowB: 'bg-rose-500/15',
+  },
+};
+
+const CountdownBannerComponent = ({ event, onEditEvent, onOpenAiStudio }) => {
   const [timeLeft, setTimeLeft] = useState({ days: 0, hours: 0, minutes: 0, isPast: false });
 
   useEffect(() => {
@@ -32,38 +59,46 @@ export const CountdownBanner = ({ event, onEditEvent, onOpenAiStudio }) => {
 
   if (!event) return null;
 
-  const typeConfig = EVENT_TYPES.find((t) => t.id === event.type) || EVENT_TYPES[0];
+  const typeInfo = EVENT_TYPES.find((t) => t.id === event.type) || EVENT_TYPES[0];
+  const theme = TYPE_THEMES[event.type] || TYPE_THEMES.other;
+  const friendlyDate = formatEventDate(event.date);
 
   return (
-    <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-slate-900 via-brand-950 to-indigo-950 text-white shadow-xl border border-slate-800">
+    <section
+      aria-label={`${event.title} overview and countdown`}
+      className={`relative overflow-hidden rounded-3xl bg-gradient-to-br ${theme.gradient} text-white shadow-xl border border-slate-800/80`}
+    >
       {/* Ambient background glow accents */}
-      <div className="absolute -top-24 -right-24 w-96 h-96 bg-brand-500/20 rounded-full blur-3xl pointer-events-none" />
-      <div className="absolute -bottom-24 -left-24 w-80 h-80 bg-rose-500/15 rounded-full blur-3xl pointer-events-none" />
+      <div className={`absolute -top-24 -right-24 w-96 h-96 ${theme.glowA} rounded-full blur-3xl pointer-events-none`} aria-hidden="true" />
+      <div className={`absolute -bottom-24 -left-24 w-80 h-80 ${theme.glowB} rounded-full blur-3xl pointer-events-none`} aria-hidden="true" />
 
       <div className="relative z-10 p-6 sm:p-8 lg:p-10 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-8">
         {/* Left: Event Details */}
         <div className="space-y-4 max-w-2xl">
           <div className="flex flex-wrap items-center gap-2.5">
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-white/10 backdrop-blur-md border border-white/15 text-brand-200">
-              <span className="text-sm">{typeConfig.icon}</span>
-              {typeConfig.label}
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-white/15 backdrop-blur-md border border-white/25 text-white">
+              <span className="text-sm" aria-hidden="true">{typeInfo.icon}</span>
+              {typeInfo.label}
             </span>
 
             {event.themeName && (
               <button
+                type="button"
                 onClick={onOpenAiStudio}
-                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-400/15 border border-amber-400/30 text-amber-300 hover:bg-amber-400/25 transition-colors"
+                title={`Open AI Theme Studio — current theme: ${event.themeName}`}
+                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-400/20 border border-amber-300/40 text-amber-200 hover:bg-amber-400/30 hover:text-amber-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300 transition-colors"
               >
-                <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+                <Sparkles className="w-3.5 h-3.5" aria-hidden="true" />
                 <span>{event.themeName}</span>
               </button>
             )}
 
             <button
+              type="button"
               onClick={onEditEvent}
-              className="inline-flex items-center gap-1 text-xs text-white/70 hover:text-white px-2.5 py-1 rounded-lg hover:bg-white/10 transition-colors"
+              className="inline-flex items-center gap-1.5 text-xs font-semibold text-white/90 hover:text-white px-3 py-1 rounded-full border border-white/25 bg-white/10 backdrop-blur-sm hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 transition-colors"
             >
-              <Edit3 className="w-3.5 h-3.5" />
+              <Pencil className="w-3 h-3" aria-hidden="true" />
               Edit Details
             </button>
           </div>
@@ -73,42 +108,50 @@ export const CountdownBanner = ({ event, onEditEvent, onOpenAiStudio }) => {
               {event.title}
             </h2>
             {event.description && (
-              <p className="text-sm sm:text-base text-slate-300 mt-2 line-clamp-2 leading-relaxed">
+              <p className="text-sm sm:text-base text-slate-200/95 mt-2 line-clamp-2 leading-relaxed drop-shadow-[0_1px_2px_rgba(0,0,0,0.55)]">
                 {event.description}
               </p>
             )}
           </div>
 
-          <div className="flex flex-wrap items-center gap-y-2 gap-x-6 text-xs sm:text-sm text-slate-300">
+          <dl className="flex flex-wrap items-center gap-y-2 gap-x-6 text-xs sm:text-sm text-slate-200/95">
             <div className="flex items-center gap-2">
-              <Calendar className="w-4 h-4 text-brand-400 shrink-0" />
-              <span>
-                {new Date(`${event.date}T12:00:00`).toLocaleDateString('en-US', {
-                  weekday: 'short',
-                  month: 'short',
-                  day: 'numeric',
-                  year: 'numeric'
-                })}
+              <Calendar className="w-4 h-4 text-brand-300 shrink-0" aria-hidden="true" />
+              <dt className="sr-only">Date and time</dt>
+              <dd>
+                {friendlyDate}
                 {event.time ? ` at ${event.time}` : ''}
-              </span>
+              </dd>
             </div>
 
-            <div className="flex items-center gap-2">
-              <MapPin className="w-4 h-4 text-rose-400 shrink-0" />
-              <span className="truncate max-w-xs">{event.location}</span>
-            </div>
+            {event.location && (
+              <div className="flex items-center gap-2">
+                <MapPin className="w-4 h-4 text-rose-300 shrink-0" aria-hidden="true" />
+                <dt className="sr-only">Location</dt>
+                <dd className="truncate max-w-xs">{event.location}</dd>
+              </div>
+            )}
 
             <div className="flex items-center gap-2">
-              <Users className="w-4 h-4 text-amber-400 shrink-0" />
-              <span>{event.guestCount || 0} Guests</span>
+              <Users className="w-4 h-4 text-amber-300 shrink-0" aria-hidden="true" />
+              <dt className="sr-only">Guest count</dt>
+              <dd>{event.guestCount || 0} Guests</dd>
             </div>
-          </div>
+          </dl>
         </div>
 
         {/* Right: Dynamic Countdown Timer */}
-        <div className="shrink-0 bg-white/10 backdrop-blur-xl border border-white/15 rounded-2xl p-5 sm:p-6 text-center min-w-[260px] shadow-inner">
+        <div
+          className="shrink-0 bg-white/10 backdrop-blur-xl border border-white/20 rounded-2xl p-5 sm:p-6 text-center min-w-[260px] shadow-inner motion-safe:hover:shadow-lg transition-shadow"
+          role="timer"
+          aria-label={
+            timeLeft.isPast
+              ? 'The celebration day has arrived'
+              : `Countdown: ${timeLeft.days} days, ${timeLeft.hours} hours, ${timeLeft.minutes} minutes remaining`
+          }
+        >
           <p className="text-xs font-bold uppercase tracking-widest text-brand-200 mb-3 flex items-center justify-center gap-1.5">
-            <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+            <Sparkles className="w-3.5 h-3.5 text-amber-300" aria-hidden="true" />
             Celebration Countdown
           </p>
 
@@ -117,56 +160,51 @@ export const CountdownBanner = ({ event, onEditEvent, onOpenAiStudio }) => {
               <div className="text-2xl font-bold text-amber-300 flex items-center justify-center gap-2">
                 🎉 Event Celebration!
               </div>
-              <p className="text-xs text-slate-300 mt-1">This event is today or has passed.</p>
+              <p className="text-xs text-slate-200/95 mt-1">This event is today or has passed.</p>
             </div>
           ) : (
             <div className="grid grid-cols-3 gap-3">
-              <div className="bg-slate-900/60 rounded-xl p-2.5 sm:p-3 border border-white/10">
-                <div className="text-2xl sm:text-3xl font-display font-black text-white">
-                  {timeLeft.days}
+              {[
+                { value: timeLeft.days, label: 'Days', tone: 'text-white' },
+                { value: timeLeft.hours, label: 'Hours', tone: 'text-brand-300' },
+                { value: timeLeft.minutes, label: 'Mins', tone: 'text-rose-300' },
+              ].map(({ value, label, tone }) => (
+                <div
+                  key={label}
+                  className="bg-slate-900/70 rounded-xl p-2.5 sm:p-3 border border-white/15"
+                >
+                  <div className={`text-2xl sm:text-3xl font-display font-black ${tone}`} aria-hidden="true">
+                    {value}
+                  </div>
+                  <div className="text-[10px] sm:text-xs uppercase tracking-wider text-slate-300 font-bold mt-0.5">
+                    <span className="sr-only">{value} </span>
+                    {label}
+                  </div>
                 </div>
-                <div className="text-[10px] sm:text-xs uppercase tracking-wider text-slate-400 font-bold mt-0.5">
-                  Days
-                </div>
-              </div>
-
-              <div className="bg-slate-900/60 rounded-xl p-2.5 sm:p-3 border border-white/10">
-                <div className="text-2xl sm:text-3xl font-display font-black text-brand-300">
-                  {timeLeft.hours}
-                </div>
-                <div className="text-[10px] sm:text-xs uppercase tracking-wider text-slate-400 font-bold mt-0.5">
-                  Hours
-                </div>
-              </div>
-
-              <div className="bg-slate-900/60 rounded-xl p-2.5 sm:p-3 border border-white/10">
-                <div className="text-2xl sm:text-3xl font-display font-black text-rose-300">
-                  {timeLeft.minutes}
-                </div>
-                <div className="text-[10px] sm:text-xs uppercase tracking-wider text-slate-400 font-bold mt-0.5">
-                  Mins
-                </div>
-              </div>
+              ))}
             </div>
           )}
 
-          {event.themeColor && event.palette && (
-            <div className="mt-4 pt-3 border-t border-white/10 flex items-center justify-center gap-2">
-              <span className="text-[10px] font-bold text-slate-300 uppercase">Palette:</span>
-              <div className="flex items-center -space-x-1.5">
+          {event.themeColor && event.palette && Array.isArray(event.palette) && event.palette.length > 0 && (
+            <div className="mt-4 pt-3 border-t border-white/15 flex items-center justify-center gap-2">
+              <span className="text-[10px] font-bold text-slate-200 uppercase tracking-wide">Palette:</span>
+              <div className="flex items-center -space-x-1.5" aria-hidden="true">
                 {event.palette.map((color, i) => (
-                  <div
-                    key={i}
-                    className="w-4 h-4 rounded-full border border-white shadow-sm"
+                  <span
+                    key={`${color}-${i}`}
+                    className="w-4 h-4 rounded-full border-2 border-white/90 shadow-sm"
                     style={{ backgroundColor: color }}
-                    title={event.paletteNames?.[i] || color}
                   />
                 ))}
               </div>
+              <span className="sr-only">Theme colors applied from the AI Theme Studio</span>
             </div>
           )}
         </div>
       </div>
-    </div>
+    </section>
   );
 };
+
+// Memo: the hero only re-renders when the event identity/date actually changes.
+export const CountdownBanner = memo(CountdownBannerComponent);

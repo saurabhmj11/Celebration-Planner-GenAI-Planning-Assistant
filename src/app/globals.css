@@ -241,6 +241,42 @@
   background: #94a3b8;
 }
 
+/* Custom scrollbar utility for inner scroll panes */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 5px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #c4b5fd;
+  border-radius: 9999px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #a78bfa;
+}
+
+/* =========================================================
+   Accessibility
+   ========================================================= */
+
+/* Visible focus for keyboard users (WCAG 2.4.7) */
+:focus-visible {
+  outline: 2px solid var(--color-brand-500, #8b5cf6);
+  outline-offset: 2px;
+}
+
+/* Respect users who prefer reduced motion (WCAG 2.3.3) */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
 /* Card shimmer highlight */
 .shimmer-bg {
   background: linear-gradient(

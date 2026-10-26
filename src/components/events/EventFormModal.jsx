@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useModalFocus } from '../../hooks/useModalFocus';
 import { useEventContext } from '../../context/EventContext';
 import { EVENT_TYPES } from '../../data/defaultData';
 import { X, Calendar, MapPin, Users, DollarSign, Clock, Sparkles, FileText, CheckCircle } from 'lucide-react';
@@ -56,14 +57,8 @@ export const EventFormModal = ({ isOpen, onClose, eventToEdit = null }) => {
     }
   }, [eventToEdit, isOpen]);
 
-  useEffect(() => {
-    if (!isOpen) return;
-    const handleKeyDown = (e) => {
-      if (e.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, onClose]);
+  // Escape-close + focus trap + focus restore (shared modal a11y hook)
+  const panelRef = useModalFocus(isOpen, onClose);
 
   if (!isOpen) return null;
 
@@ -92,6 +87,8 @@ export const EventFormModal = ({ isOpen, onClose, eventToEdit = null }) => {
 
   return (
     <div
+      ref={panelRef}
+      tabIndex={-1}
       role="dialog"
       aria-modal="true"
       aria-labelledby="event-modal-title"
@@ -99,7 +96,7 @@ export const EventFormModal = ({ isOpen, onClose, eventToEdit = null }) => {
     >
       <div className="relative w-full max-w-2xl bg-white rounded-3xl shadow-2xl border border-slate-100 overflow-hidden my-8">
         {/* Header */}
-        <div className="px-6 py-5 bg-gradient-to-r from-brand-700 via-brand-600 to-indigo-600 text-white flex items-center justify-between">
+        <div className="px-6 py-5 bg-gradient-to-r from-brand-700 via-brand-600 to-fuchsia-600 text-white flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="p-2.5 bg-white/15 rounded-2xl backdrop-blur-md">
               <Sparkles className="w-5 h-5 text-amber-300" />
@@ -285,7 +282,7 @@ export const EventFormModal = ({ isOpen, onClose, eventToEdit = null }) => {
             </button>
             <button
               type="submit"
-              className="px-7 py-2.5 text-sm font-semibold text-white bg-gradient-to-r from-brand-600 to-indigo-600 hover:from-brand-700 hover:to-indigo-700 rounded-xl shadow-lg shadow-brand-500/25 transition-all flex items-center gap-2"
+              className="px-7 py-2.5 text-sm font-semibold text-white bg-gradient-to-r from-brand-600 to-fuchsia-600 hover:from-brand-700 hover:to-fuchsia-700 rounded-xl shadow-lg shadow-brand-500/25 transition-all flex items-center gap-2"
             >
               <CheckCircle className="w-4 h-4" />
               {isEditing ? 'Save Changes' : 'Create Celebration'}

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useModalFocus } from '../../hooks/useModalFocus';
 import { useEventContext } from '../../context/EventContext';
 import { GEMINI_MODEL, categorizeGeminiError } from '../../services/geminiService.js';
 import { Key, ShieldCheck, Sparkles, X, Check, ExternalLink, AlertTriangle, Clock, RefreshCw } from 'lucide-react';
@@ -99,19 +100,15 @@ export const ApiKeyModal = ({ isOpen, onClose }) => {
     }
   };
 
-  useEffect(() => {
-    if (!isOpen) return;
-    const handleKeyDown = (e) => {
-      if (e.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, onClose]);
+  // Escape-close + focus trap + focus restore (shared modal a11y hook)
+  const panelRef = useModalFocus(isOpen, onClose);
 
   if (!isOpen) return null;
 
   return (
     <div
+      ref={panelRef}
+      tabIndex={-1}
       role="dialog"
       aria-modal="true"
       aria-labelledby="api-key-modal-title"
@@ -119,7 +116,7 @@ export const ApiKeyModal = ({ isOpen, onClose }) => {
     >
       <div className="relative w-full max-w-lg bg-white rounded-2xl shadow-2xl border border-slate-100 overflow-hidden">
         {/* Header */}
-        <div className="px-6 py-5 bg-gradient-to-r from-brand-600 to-indigo-600 text-white flex items-center justify-between">
+        <div className="px-6 py-5 bg-gradient-to-r from-brand-600 to-fuchsia-600 text-white flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-white/20 rounded-xl">
               <Key className="w-5 h-5 text-amber-300" />
@@ -265,7 +262,7 @@ export const ApiKeyModal = ({ isOpen, onClose }) => {
               </button>
               <button
                 type="submit"
-                className="px-5 py-2 text-xs font-semibold text-white bg-gradient-to-r from-brand-600 to-indigo-600 hover:from-brand-700 hover:to-indigo-700 rounded-xl shadow-md shadow-brand-500/25 transition-all"
+                className="px-5 py-2 text-xs font-semibold text-white bg-gradient-to-r from-brand-600 to-fuchsia-600 hover:from-brand-700 hover:to-fuchsia-700 rounded-xl shadow-md shadow-brand-500/25 transition-all"
               >
                 Save Settings
               </button>

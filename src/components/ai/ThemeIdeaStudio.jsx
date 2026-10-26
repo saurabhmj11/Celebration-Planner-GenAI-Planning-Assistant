@@ -243,7 +243,7 @@ export const ThemeIdeaStudio = ({ onOpenApiKey }) => {
       )}
 
       {/* AI Generator Control Box */}
-      <div className="bg-gradient-to-br from-slate-900 via-brand-950 to-indigo-950 rounded-3xl p-6 sm:p-8 text-white shadow-xl border border-slate-800 relative overflow-hidden">
+      <div className="bg-gradient-to-br from-slate-900 via-brand-950 to-fuchsia-950 rounded-3xl p-6 sm:p-8 text-white shadow-xl border border-slate-800 relative overflow-hidden">
         <div className="relative z-10 space-y-5">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
             <div>
@@ -418,7 +418,7 @@ export const ThemeIdeaStudio = ({ onOpenApiKey }) => {
                   {theme.recommendedMusic && (
                     <div className="space-y-1 pt-2 border-t border-slate-100 text-xs text-slate-700">
                       <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
-                        <Music className="w-3.5 h-3.5 text-indigo-500" />
+                        <Music className="w-3.5 h-3.5 text-fuchsia-500" />
                         Music Direction
                       </span>
                       <p className="leading-relaxed">{theme.recommendedMusic}</p>

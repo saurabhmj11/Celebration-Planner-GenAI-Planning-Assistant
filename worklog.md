@@ -38,3 +38,36 @@ Stage Summary:
 - Key files: `src/components/PlannerApp.jsx`, `src/app/api/ai/themes/route.ts`, `src/services/geminiService.js`, `src/context/EventContext.jsx`, `src/data/defaultData.js`, `src/app/globals.css`.
 - Verification artifacts: 9 screenshots under `/home/z/my-project/scripts/verify-*.png`.
 - All lint checks pass; dev server compiles clean; AI endpoint returns 200 with personalized JSON themes.
+
+---
+Task ID: 2
+Agent: Main agent (Z.ai)
+Task: Cover all hackathon evaluation criteria (Code Quality, Security, Efficiency, Testing, Accessibility, Problem Statement Alignment) and enhance the UI for the AI Code Submission round.
+
+Work Log:
+- Audited current state: browser screenshot + VLM analysis identified 6 concrete UI weaknesses (hero contrast, inconsistent badges, orphaned Edit link, card imbalance, mixed date formats, mobile polish).
+- SECURITY: built layered hardening —
+  - New `src/lib/security/rateLimit.ts` (in-memory per-client limiter, 8 req/min + Retry-After) and `sanitize.ts` (control/zero-width/bidi char stripping, length caps).
+  - New `src/lib/validation/schemas.ts` — Zod request schemas with field-level error maps.
+  - New `src/lib/ai/jsonExtractor.ts` + `themeNormalizer.ts` + `engine.ts` extracted from route as pure, testable modules; route refactored to thin orchestrator via injectable-engine factory (`createThemesPostHandler`).
+  - `next.config.ts`: security headers (X-Frame-Options, nosniff, Referrer-Policy, Permissions-Policy).
+  - `storageService.js`: hostile-import rejection (size/count caps, field normalization, control-char strip).
+  - `calculator.js`: strict calendar validation (rejects 2026-13-99 style overflow).
+- TESTING: ported + modernized to bun:test — 11 suites, 114 tests, all passing in ~200ms:
+  - budget/timeline/vendor calculator suites, formatters, geminiService error mapping, storage persistence & import security, jsonExtractor, themeNormalizer, rateLimit, sanitize, and FULL AI-route contract tests (happy path, retry, 400/413/429, per-client limits, stack-leak prevention) via the injected fake engine.
+- UI/A11Y ENHANCEMENTS:
+  - CountdownBanner: WCAG-fixed hero contrast (drop-shadow + brighter text), proper Edit Details button, event-type-aware gradients (rose wedding / violet birthday / emerald community), semantic landmarks, role=timer.
+  - StatCards: converted clickable divs to real <button>s with rich aria-labels + progressbar roles; unified semantic StatusBadge component.
+  - Navbar: Escape-close + focus restore on dropdown, aria-haspopup/expanded, friendly dates (formatShortDate), focus-visible rings, mobile drawer with reset action.
+  - New `useModalFocus` hook wired into all 5 modals (focus trap, Escape-close, focus restore, initial focus) — replaced 5 duplicated ad-hoc handlers.
+  - Skip-to-content link, prefers-reduced-motion support, custom-scrollbar utility, sticky footer with iOS safe-area.
+  - Dashboard: useMemo derived data, polished empty states with action links, memoized components.
+- EFFICIENCY: memoized EventContext value (all actions useCallback'd), React.memo on dashboard components, lazy-loaded print summary via next/dynamic.
+- BRAND CONSISTENCY: swept all indigo/blue to brand/fuchsia/emerald palette across 9 components.
+- README.md: comprehensive submission-ready documentation (problem alignment table, GenAI services table, security/a11y/efficiency/testing sections, run instructions).
+- Browser E2E verification: all 6 tabs render, modal focus-trap + Escape verified in DOM, event-creation golden path (community event with emerald hero), event deletion, live GenAI E2E (POST /api/ai/themes → 200, glm-4-plus, 3 personalized themes "Whispering Wings Gala" etc.), mobile 390px responsive + hamburger, final VLM verdict 9/10 polish with zero critical defects. `bun run lint` clean; dev.log clean.
+
+Stage Summary:
+- Deliverable: fully enhanced, submission-ready Celebration & Event Planner — 114 passing tests, layered API security, WCAG 2.1 a11y patterns, 9/10 VLM-rated polished UI, live GenAI verified end-to-end.
+- Key new files: src/lib/{ai,security,validation}/*, src/hooks/useModalFocus.js, src/utils/formatters.js, src/components/common/StatusBadge.jsx, tests/** (11 suites), README.md, bunfig.toml.
+- All evaluation criteria now explicitly covered and documented in README.

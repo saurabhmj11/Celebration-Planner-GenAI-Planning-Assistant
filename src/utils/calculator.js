@@ -99,7 +99,16 @@ export function getDueDateUrgency(dueDateStr, isCompleted = false, referenceDate
   const parts = dueDateStr.split('-');
   if (parts.length !== 3) return null;
   const [year, month, day] = parts.map(Number);
+
+  // Strict calendar validation: reject month/day overflow (e.g. 2026-13-99)
+  // which JavaScript's Date would otherwise silently roll over.
+  if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) return null;
+  if (month < 1 || month > 12 || day < 1 || day > 31) return null;
+  if (String(year).length !== 4) return null;
+
   const due = new Date(year, month - 1, day);
+  // Guard against e.g. 2026-02-31 which rolls into March.
+  if (due.getMonth() !== month - 1 || due.getDate() !== day) return null;
   if (Number.isNaN(due.getTime())) return null;
 
   const now = new Date(referenceDate.getFullYear(), referenceDate.getMonth(), referenceDate.getDate());

@@ -83,7 +83,7 @@ export const BudgetPlanner = ({ onOpenExpenseModal, onEditExpense }) => {
 
         <button
           onClick={onOpenExpenseModal}
-          className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-2xl bg-gradient-to-r from-brand-600 to-indigo-600 hover:from-brand-700 hover:to-indigo-700 text-white font-bold text-xs shadow-lg shadow-brand-500/25 transition-all shrink-0"
+          className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-2xl bg-gradient-to-r from-brand-600 to-fuchsia-600 hover:from-brand-700 hover:to-fuchsia-700 text-white font-bold text-xs shadow-lg shadow-brand-500/25 transition-all shrink-0"
         >
           <Plus className="w-4 h-4" />
           <span>Add Expense Item</span>
@@ -102,7 +102,7 @@ export const BudgetPlanner = ({ onOpenExpenseModal, onEditExpense }) => {
 
         <div className="bg-white rounded-3xl p-5 border border-slate-200/80 shadow-card">
           <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Total Allocated</p>
-          <h3 className="text-2xl font-display font-black text-indigo-600 mt-1">
+          <h3 className="text-2xl font-display font-black text-brand-700 mt-1">
             ${totalAllocated.toLocaleString()}
           </h3>
           <p className="text-[11px] text-slate-500 mt-2">

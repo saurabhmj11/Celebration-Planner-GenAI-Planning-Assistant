@@ -1,0 +1,4 @@
+# Bun test configuration — run the project's own test suite only.
+[test]
+root = "./tests"
+coverage = false

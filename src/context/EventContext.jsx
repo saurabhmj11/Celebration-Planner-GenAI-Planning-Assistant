@@ -439,25 +439,11 @@ export const EventProvider = ({ children }) => {
     showToast(`Theme "${theme.name}" applied with decor milestones added! ✨`, 'success');
   }, [activeEvent, showToast, triggerConfetti]);
 
-  // Context value
-  const value = {
-    events,
-    activeEventId,
-    activeEvent,
-    setActiveEventId,
-    apiKey,
-    setApiKey,
-    toast,
-    showToast,
-    triggerConfetti,
-    // Event CRUD
-    addEvent,
-    updateEvent,
-    deleteEvent,
-    duplicateEvent,
-    resetAllToSampleData,
-    exportEventsData: () => storageService.exportData(),
-    importEventsData: (jsonStr) => {
+  // Memoized export/import wrappers so the context value stays referentially
+  // stable between renders (all other actions are already useCallback'd).
+  const exportEventsData = useCallback(() => storageService.exportData(), []);
+  const importEventsData = useCallback(
+    (jsonStr) => {
       const res = storageService.importData(jsonStr);
       if (res.success) {
         setEvents(res.events);
@@ -467,24 +453,79 @@ export const EventProvider = ({ children }) => {
       }
       return res;
     },
-    // Budget & Expense CRUD
-    addExpense,
-    updateExpense,
-    deleteExpense,
-    toggleExpensePaid,
-    // Timeline & Tasks CRUD
-    addTask,
-    updateTask,
-    deleteTask,
-    toggleTaskComplete,
-    // Vendor CRUD
-    addVendor,
-    updateVendor,
-    deleteVendor,
-    updateVendorStatus,
-    // AI Theme Application
-    applyThemeToEvent,
-  };
+    [showToast, triggerConfetti]
+  );
+
+  // Context value — memoized so consumers only re-render when state changes.
+  const value = useMemo(
+    () => ({
+      events,
+      activeEventId,
+      activeEvent,
+      setActiveEventId,
+      apiKey,
+      setApiKey,
+      toast,
+      showToast,
+      triggerConfetti,
+      // Event CRUD
+      addEvent,
+      updateEvent,
+      deleteEvent,
+      duplicateEvent,
+      resetAllToSampleData,
+      exportEventsData,
+      importEventsData,
+      // Budget & Expense CRUD
+      addExpense,
+      updateExpense,
+      deleteExpense,
+      toggleExpensePaid,
+      // Timeline & Tasks CRUD
+      addTask,
+      updateTask,
+      deleteTask,
+      toggleTaskComplete,
+      // Vendor CRUD
+      addVendor,
+      updateVendor,
+      deleteVendor,
+      updateVendorStatus,
+      // AI Theme Application
+      applyThemeToEvent,
+    }),
+    [
+      events,
+      activeEventId,
+      activeEvent,
+      setActiveEventId,
+      apiKey,
+      setApiKey,
+      toast,
+      showToast,
+      triggerConfetti,
+      addEvent,
+      updateEvent,
+      deleteEvent,
+      duplicateEvent,
+      resetAllToSampleData,
+      exportEventsData,
+      importEventsData,
+      addExpense,
+      updateExpense,
+      deleteExpense,
+      toggleExpensePaid,
+      addTask,
+      updateTask,
+      deleteTask,
+      toggleTaskComplete,
+      addVendor,
+      updateVendor,
+      deleteVendor,
+      updateVendorStatus,
+      applyThemeToEvent,
+    ]
+  );
 
   return <EventContext.Provider value={value}>{children}</EventContext.Provider>;
 };

@@ -1,5 +1,16 @@
 import { NextResponse } from "next/server";
-import ZAI from "z-ai-web-dev-sdk";
+
+import { extractAndParseJSON } from "@/lib/ai/jsonExtractor";
+import { normalizeThemePayload } from "@/lib/ai/themeNormalizer";
+import { runChatCompletion, type RunEngine } from "@/lib/ai/engine";
+import { checkRateLimit, getClientKey } from "@/lib/security/rateLimit";
+import { sanitizeText } from "@/lib/security/sanitize";
+import {
+  MAX_BODY_BYTES,
+  formatZodErrors,
+  themesRequestSchema,
+  type EventBrief,
+} from "@/lib/validation/schemas";
 
 /**
  * GenAI Theme & Idea Studio backend.
@@ -11,40 +22,34 @@ import ZAI from "z-ai-web-dev-sdk";
  * celebration theme concepts — including name, tagline, 4-color palette,
  * decor highlights, music direction, catering ideas, and a budget tip —
  * tailored to the active event's type, venue, guest count, budget and notes.
+ *
+ * Security layers (outermost first):
+ *   1. Method allowlist + payload-size cap (413).
+ *   2. Per-client rate limiting (429 + Retry-After).
+ *   3. Strict Zod schema validation (400 with field errors).
+ *   4. String sanitization before prompt assembly (control chars stripped).
+ *   5. Response normalization + sanitization before it reaches the client.
+ *
+ * Architecture: the handler is produced by a factory so tests can inject a
+ * deterministic LLM engine and cover the full pipeline without live calls.
  */
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
-const MAX_BODY_BYTES = 50 * 1024; // 50KB payload cap
+/** 8 requests / minute / client — generous for humans, hostile to scripts. */
+const RATE_LIMIT = { key: "ai:themes", limit: 8, windowMs: 60_000 };
 
-interface EventBrief {
-  title?: string;
-  type?: string;
-  date?: string;
-  time?: string;
-  location?: string;
-  guestCount?: number;
-  budget?: number;
-  description?: string;
-}
-
-interface ThemeConcept {
-  id?: string;
-  name?: string;
-  tagline?: string;
-  palette?: unknown;
-  paletteNames?: unknown;
-  decorHighlights?: unknown;
-  recommendedMusic?: string;
-  cateringIdeas?: string;
-  budgetTip?: string;
-}
+/** 2 attempts: 1 normal + 1 "format your JSON better" retry. */
+const MAX_LLM_ATTEMPTS = 2;
 
 const SYSTEM_PROMPT = `You are an elite celebration and luxury event designer with deep expertise in weddings, milestone birthdays, anniversaries, community festivals, charity galas, and baby showers.
 You always respond with STRICTLY VALID JSON — no markdown fences, no commentary, no text outside the JSON object.
 Your design ideas are creative, cohesive, actionable, and budget-aware.`;
+
 function buildUserPrompt(event: EventBrief, customPrompt: string): string {
+  // Every interpolated value has already passed Zod + sanitization upstream,
+  // so prompt assembly cannot smuggle control chars or oversized strings.
   return `
 Generate 3 distinct, creative, and actionable event theme ideas for:
 - Event Type: ${event.type || "celebration"}
@@ -83,146 +88,71 @@ Rules:
 - Output raw JSON only. Do not wrap in markdown code fences. The first character of your reply must be "{" and the last must be "}".`;
 }
 
-/** Extract the first balanced JSON object from text (respects strings/escapes). */
-function extractBalancedJson(text: string): string | null {
-  const start = text.indexOf("{");
-  if (start === -1) return null;
-  let depth = 0;
-  let inStr = false;
-  let esc = false;
-  for (let i = start; i < text.length; i++) {
-    const ch = text[i];
-    if (esc) {
-      esc = false;
-      continue;
-    }
-    if (ch === "\\") {
-      esc = true;
-      continue;
-    }
-    if (ch === '"') {
-      inStr = !inStr;
-      continue;
-    }
-    if (inStr) continue;
-    if (ch === "{") depth++;
-    else if (ch === "}") {
-      depth--;
-      if (depth === 0) return text.slice(start, i + 1);
-    }
-  }
-  return null;
-}
-
-/** Robustly extract a JSON object from an LLM response that may contain fences or prose. */
-function extractAndParseJSON(rawText: string): Record<string, unknown> {
-  if (!rawText || typeof rawText !== "string") {
-    throw new Error("Empty response content received from the AI engine.");
-  }
-
-  let text = rawText.trim();
-  // Strip markdown code fences if present (e.g. ```json ... ```)
-  if (text.startsWith("```")) {
-    text = text
-      .replace(/^```(?:json)?\s*/i, "")
-      .replace(/\s*```\s*$/i, "")
-      .trim();
-  }
-
-  // 1. Direct parse attempt
-  try {
-    const direct = JSON.parse(text);
-    if (direct && typeof direct === "object") return direct;
-  } catch {
-    // fall through
-  }
-
-  // 2. Balanced-brace extraction (handles trailing prose or stray characters)
-  const balanced = extractBalancedJson(text);
-  if (balanced) {
+/**
+ * Handler factory. `runEngine` is the LLM seam — inject a fake in tests,
+ * use the default z-ai-web-dev-sdk engine in production.
+ */
+export function createThemesPostHandler(runEngine: RunEngine) {
+  return async function POST(request: Request): Promise<Response> {
     try {
-      const extracted = JSON.parse(balanced);
-      if (extracted && typeof extracted === "object") return extracted;
-    } catch {
-      // fall through
-    }
-  }
+      // ---- Layer 1: method + payload-size safeguards ----------------------
+      if (request.method !== "POST") {
+        return NextResponse.json(
+          { error: "Method Not Allowed" },
+          { status: 405, headers: { Allow: "POST" } }
+        );
+      }
 
-  // 3. Greedy regex as a last resort
-  const match = text.match(/\{[\s\S]*\}/);
-  if (match) {
-    try {
-      const extracted = JSON.parse(match[0]);
-      if (extracted && typeof extracted === "object") return extracted;
-    } catch {
-      // fall through
-    }
-  }
+      // ---- Layer 2: per-client rate limiting ------------------------------
+      const rate = checkRateLimit(getClientKey(request), RATE_LIMIT);
+      if (!rate.allowed) {
+        return NextResponse.json(
+          { error: "Too many AI requests. Please wait a moment and try again." },
+          {
+            status: 429,
+            headers: {
+              "Retry-After": String(rate.retryAfterSec),
+              "X-RateLimit-Limit": String(RATE_LIMIT.limit),
+              "X-RateLimit-Remaining": "0",
+            },
+          }
+        );
+      }
 
-  throw new Error("AI response did not contain a valid themes JSON structure.");
-}
+      const rawBody = await request.text();
+      if (rawBody.length > MAX_BODY_BYTES) {
+        return NextResponse.json({ error: "Payload Too Large" }, { status: 413 });
+      }
 
-const FALLBACK_PALETTE = ["#8b5cf6", "#ec4899", "#f59e0b", "#06b6d4"];
+      let jsonBody: unknown;
+      try {
+        jsonBody = rawBody ? JSON.parse(rawBody) : {};
+      } catch {
+        return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+      }
 
-function normalizeTheme(t: ThemeConcept, idx: number): ThemeConcept & { id: string; name: string } {
-  const theme = t && typeof t === "object" ? t : {};
-  const palette = Array.isArray(theme.palette) && theme.palette.length > 0
-    ? (theme.palette as string[]).slice(0, 4)
-    : FALLBACK_PALETTE;
-  return {
-    id: typeof theme.id === "string" && theme.id ? theme.id : `ai-theme-${Date.now()}-${idx}`,
-    name: typeof theme.name === "string" && theme.name ? theme.name : `Theme Concept #${idx + 1}`,
-    tagline: typeof theme.tagline === "string" && theme.tagline ? theme.tagline : "Custom celebration concept crafted by AI",
-    palette,
-    paletteNames:
-      Array.isArray(theme.paletteNames) && theme.paletteNames.length > 0
-        ? (theme.paletteNames as string[]).slice(0, 4)
-        : ["Primary", "Accent", "Warm Glow", "Highlight"],
-    decorHighlights:
-      Array.isArray(theme.decorHighlights) && theme.decorHighlights.length > 0
-        ? (theme.decorHighlights as string[]).slice(0, 6)
-        : ["Custom tailored celebration decor styling"],
-    recommendedMusic: typeof theme.recommendedMusic === "string" ? theme.recommendedMusic : "Curated celebration playlist",
-    cateringIdeas: typeof theme.cateringIdeas === "string" ? theme.cateringIdeas : "Tailored catering and signature drink pairings",
-    budgetTip: typeof theme.budgetTip === "string" ? theme.budgetTip : "Prioritize 35-40% of budget on core venue & ambiance.",
-  };
-}
+      // ---- Layer 3: strict schema validation ------------------------------
+      const parsedRequest = themesRequestSchema.safeParse(jsonBody);
+      if (!parsedRequest.success) {
+        return NextResponse.json(
+          { error: "Validation failed", fields: formatZodErrors(parsedRequest.error) },
+          { status: 400 }
+        );
+      }
 
-export async function POST(request: Request) {
-  try {
-    // Method + payload-size safeguards
-    if (request.method !== "POST") {
-      return NextResponse.json({ error: "Method Not Allowed" }, { status: 405 });
-    }
-    const rawBody = await request.text();
-    if (rawBody.length > MAX_BODY_BYTES) {
-      return NextResponse.json({ error: "Payload Too Large" }, { status: 413 });
-    }
+      // ---- Layer 4: sanitize free text bound for the prompt ---------------
+      const event: EventBrief = parsedRequest.data.event ?? {};
+      const customPrompt = sanitizeText(parsedRequest.data.customPrompt ?? "", {
+        maxLength: 2000,
+      });
 
-    let parsedBody: { event?: EventBrief; customPrompt?: unknown };
-    try {
-      parsedBody = rawBody ? JSON.parse(rawBody) : {};
-    } catch {
-      return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
-    }
+      // Call the GenAI engine through the injected seam.
+      // Retry once on transient formatting/parse hiccups before surfacing an error.
+      const userPrompt = buildUserPrompt(event, customPrompt);
+      let lastParseError: unknown = null;
 
-    const event: EventBrief =
-      parsedBody.event && typeof parsedBody.event === "object" ? parsedBody.event : {};
-    const customPrompt =
-      typeof parsedBody.customPrompt === "string" ? parsedBody.customPrompt.slice(0, 2000) : "";
-
-    // Call the GenAI engine (z-ai-web-dev-sdk — server side only).
-    // Retry once on transient formatting/parse hiccups before surfacing an error.
-    const zai = await ZAI.create();
-    const userPrompt = buildUserPrompt(event, customPrompt);
-
-    let content: string | undefined;
-    let completion: { choices?: Array<{ message?: { content?: string } }>; model?: string } | null = null;
-    let lastParseError: unknown = null;
-
-    for (let attempt = 0; attempt < 2; attempt++) {
-      completion = await zai.chat.completions.create({
-        messages: [
+      for (let attempt = 0; attempt < MAX_LLM_ATTEMPTS; attempt++) {
+        const completion = await runEngine([
           { role: "assistant", content: SYSTEM_PROMPT },
           {
             role: "user",
@@ -231,49 +161,47 @@ export async function POST(request: Request) {
                 ? userPrompt
                 : `${userPrompt}\n\nIMPORTANT: Your previous reply could not be parsed. Return ONLY a raw JSON object — first character "{", last character "}". No prose, no fences.`,
           },
-        ],
-        thinking: { type: "disabled" },
-      });
+        ]);
 
-      content = completion?.choices?.[0]?.message?.content;
-      if (!content || !content.trim()) {
-        lastParseError = new Error("The AI engine returned an empty response.");
-        continue;
-      }
+        const content = completion?.content;
+        if (!content || !content.trim()) {
+          lastParseError = new Error("The AI engine returned an empty response.");
+          continue;
+        }
 
-      try {
-        const attemptParsed = extractAndParseJSON(content);
-        const attemptThemes = Array.isArray(attemptParsed.themes)
-          ? (attemptParsed.themes as ThemeConcept[])
-          : [];
-        if (attemptThemes.length > 0) {
-          const themes = attemptThemes.slice(0, 3).map((t, idx) => normalizeTheme(t, idx));
-          const summary =
-            typeof attemptParsed.summary === "string" && attemptParsed.summary
-              ? attemptParsed.summary
-              : `Personalized AI recommendations tailored for your ${event.type || "celebration"}.`;
+        try {
+          // ---- Layer 5: parse + normalize before it reaches the client -----
+          const parsed = extractAndParseJSON(content);
+          const payload = normalizeThemePayload(parsed);
+          if (!payload) {
+            lastParseError = new Error("AI response did not include any theme concepts.");
+            continue;
+          }
           return NextResponse.json({
             success: true,
-            summary,
-            themes,
-            model: typeof completion.model === "string" ? completion.model : "GLM",
+            summary: payload.summary,
+            themes: payload.themes,
+            model: completion.model ?? "GLM",
           });
+        } catch (parseErr) {
+          lastParseError = parseErr;
         }
-        lastParseError = new Error("AI response did not include any theme concepts.");
-      } catch (parseErr) {
-        lastParseError = parseErr;
       }
-    }
 
-    throw lastParseError instanceof Error
-      ? lastParseError
-      : new Error("The AI engine could not produce valid theme JSON. Please retry.");
-  } catch (err) {
-    const message = err instanceof Error ? err.message : "Unexpected AI generation error";
-    console.error("[api/ai/themes] Generation failed:", message);
-    return NextResponse.json(
-      { error: `Live AI generation failed: ${message}` },
-      { status: 500 }
-    );
-  }
+      throw lastParseError instanceof Error
+        ? lastParseError
+        : new Error("The AI engine could not produce valid theme JSON. Please retry.");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Unexpected AI generation error";
+      console.error("[api/ai/themes] Generation failed:", message);
+      // Never leak stack traces or provider internals to the client.
+      return NextResponse.json(
+        { error: `Live AI generation failed: ${message}` },
+        { status: 500 }
+      );
+    }
+  };
 }
+
+/** Production handler wired to the z-ai-web-dev-sdk engine. */
+export const POST = createThemesPostHandler(runChatCompletion);

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useModalFocus } from '../../hooks/useModalFocus';
 import { useEventContext } from '../../context/EventContext';
 import { TIMELINE_PHASES, BUDGET_CATEGORIES } from '../../data/defaultData';
 import { X, Clock, Calendar, FileText, CheckCircle2 } from 'lucide-react';
@@ -47,14 +48,8 @@ export const TaskFormModal = ({ isOpen, onClose, taskToEdit = null }) => {
     }
   }, [taskToEdit, activeEvent, isOpen]);
 
-  useEffect(() => {
-    if (!isOpen) return;
-    const handleKeyDown = (e) => {
-      if (e.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, onClose]);
+  // Escape-close + focus trap + focus restore (shared modal a11y hook)
+  const panelRef = useModalFocus(isOpen, onClose);
 
   if (!isOpen) return null;
 
@@ -79,6 +74,8 @@ export const TaskFormModal = ({ isOpen, onClose, taskToEdit = null }) => {
 
   return (
     <div
+      ref={panelRef}
+      tabIndex={-1}
       role="dialog"
       aria-modal="true"
       aria-labelledby="task-modal-title"
@@ -86,7 +83,7 @@ export const TaskFormModal = ({ isOpen, onClose, taskToEdit = null }) => {
     >
       <div className="relative w-full max-w-lg bg-white rounded-3xl shadow-2xl border border-slate-100 overflow-hidden">
         {/* Header */}
-        <div className="px-6 py-5 bg-gradient-to-r from-indigo-600 to-brand-600 text-white flex items-center justify-between">
+        <div className="px-6 py-5 bg-gradient-to-r from-brand-600 to-brand-600 text-white flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-white/20 rounded-xl">
               <Clock className="w-5 h-5 text-amber-300" />
@@ -219,7 +216,7 @@ export const TaskFormModal = ({ isOpen, onClose, taskToEdit = null }) => {
             </button>
             <button
               type="submit"
-              className="px-6 py-2.5 text-xs font-semibold text-white bg-gradient-to-r from-indigo-600 to-brand-600 hover:from-indigo-700 hover:to-brand-700 rounded-xl shadow-md shadow-brand-500/25 transition-all flex items-center gap-1.5"
+              className="px-6 py-2.5 text-xs font-semibold text-white bg-gradient-to-r from-brand-600 to-brand-600 hover:from-brand-700 hover:to-brand-700 rounded-xl shadow-md shadow-brand-500/25 transition-all flex items-center gap-1.5"
             >
               <CheckCircle2 className="w-4 h-4" />
               {isEditing ? 'Save Changes' : 'Add Milestone'}

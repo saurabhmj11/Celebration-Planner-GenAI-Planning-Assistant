@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useModalFocus } from '../../hooks/useModalFocus';
 import { useEventContext } from '../../context/EventContext';
 import { VENDOR_CATEGORIES, VENDOR_STATUSES } from '../../data/defaultData';
 import { X, Building2, User, Phone, Mail, DollarSign, FileText, CheckCircle2 } from 'lucide-react';
@@ -53,14 +54,8 @@ export const VendorFormModal = ({ isOpen, onClose, vendorToEdit = null }) => {
     }
   }, [vendorToEdit, isOpen]);
 
-  useEffect(() => {
-    if (!isOpen) return;
-    const handleKeyDown = (e) => {
-      if (e.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, onClose]);
+  // Escape-close + focus trap + focus restore (shared modal a11y hook)
+  const panelRef = useModalFocus(isOpen, onClose);
 
   if (!isOpen) return null;
 
@@ -92,6 +87,8 @@ export const VendorFormModal = ({ isOpen, onClose, vendorToEdit = null }) => {
 
   return (
     <div
+      ref={panelRef}
+      tabIndex={-1}
       role="dialog"
       aria-modal="true"
       aria-labelledby="vendor-modal-title"
