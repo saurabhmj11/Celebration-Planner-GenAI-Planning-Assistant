@@ -13,7 +13,7 @@ Planning a celebration is fragmented: budgets live in spreadsheets, vendors in c
 | GenAI-powered planning assistant | **Seven live GenAI capabilities across every module** via `/api/ai/themes` + `/api/ai/assist` (z-ai-web-dev-sdk / GLM): AI Theme Studio, Budget Copilot, Milestone Planner, Vendor Advisor & inquiry drafts, **AI Venue Finder venue scout (with a deterministic recommendation algorithm + interactive photo map)**, Plan Review, and the floating Planning Assistant chat |
 | Weddings · Birthdays · Community events | Type-aware presets, per-type hero gradients, tailored sample blueprints for each of the three event categories |
 | Budgets | Smart budget planner with 8 expense categories, allocated-vs-spent math, live over-budget warnings, per-guest cost analytics |
-| Timelines | Phased milestone timeline (3+ months → day-of → wrap-up) with urgency badges and completion tracking |
+| Timelines | Phased milestone timeline (3+ months → day-of → wrap-up) with urgency badges, completion tracking, and **type-aware starter checklists** — every new celebration seeds a per-type milestone plan dated for the event date, and changing the celebration type offers a one-click timeline rebuild (6 dedicated checklists: wedding, birthday, anniversary, community, gala, baby shower) |
 | Vendor checklists | Vendor directory with pipeline statuses, contact shortcuts, committed-cost ledger, category filters |
 | Personalized ideas | AI Theme Studio: 3 tailored concepts per generation, one-click "Apply to Event" writes palette + decor milestones |
 
@@ -46,6 +46,7 @@ Planning a celebration is fragmented: budgets live in spreadsheets, vendors in c
 ### 6. AI Everywhere — six more GenAI copilots
 - **AI Budget Copilot** (Budget tab): a personalized allocation plan with % bars, dollar amounts and saving tips — applicable as real budget lines in one click.
 - **AI Milestone Planner** (Timeline tab): drafts a full task plan sized to the real runway (dates clamped to the event date), previewed with per-task checkboxes before anything is saved.
+- **Type-aware starter timelines** (`src/lib/planning/starterPlan.js`): creating a celebration seeds a per-type milestone checklist dated for the event date (deterministic + offline-safe, reusing the Smart Offline Planning Engine's compressed templates); editing an event's celebration type surfaces a rebuild prompt so the plan always matches the type — with an explicit opt-out that preserves existing tasks.
 - **AI Vendor Advisor** (Vendors tab): vendor-gap analysis with realistic cost ranges, the six must-ask questions, one-click "add as vendor rows", and AI-drafted outreach emails per vendor with copy-to-clipboard.
 - **AI Plan Review** (Dashboard): a 0–100 readiness audit — strengths, risks, and prioritized next actions computed from the real budget, task and vendor data.
 - **AI Planning Assistant** (floating, every tab): a context-aware chat that knows the active event's budget, runway, tasks and vendors, with suggested follow-ups and multi-turn memory.

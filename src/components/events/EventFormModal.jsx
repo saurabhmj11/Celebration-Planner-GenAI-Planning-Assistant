@@ -4,8 +4,9 @@ import { useEventContext } from '../../context/EventContext';
 import { EVENT_TYPES } from '../../data/defaultData';
 import { VENUES, VENUE_TYPES } from '../../data/venues';
 import { topVenueSuggestions, estimateVenueCost } from '../../lib/venues/recommender';
-import { formatCurrency } from '../../utils/formatters';
-import { X, Calendar, MapPin, Users, DollarSign, Clock, Sparkles, FileText, CheckCircle, MapPinned, AlertTriangle, Info } from 'lucide-react';
+import { buildStarterTasks } from '../../lib/planning/starterPlan';
+import { formatCurrency, formatShortDate } from '../../utils/formatters';
+import { X, Calendar, MapPin, Users, DollarSign, Clock, Sparkles, FileText, CheckCircle, MapPinned, AlertTriangle, Info, RefreshCw } from 'lucide-react';
 
 /** Share of the total budget assumed bookable for the venue. */
 const VENUE_BUDGET_SHARE = 0.35;
@@ -40,6 +41,9 @@ export const EventFormModal = ({ isOpen, onClose, eventToEdit = null }) => {
 
   const [errors, setErrors] = useState({});
   const [selectedVenueId, setSelectedVenueId] = useState(null);
+  // When the celebration TYPE changes on an edit, offer to rebuild the timeline
+  // (default on — the plan should follow the celebration type).
+  const [rebuildTimeline, setRebuildTimeline] = useState(true);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -57,6 +61,7 @@ export const EventFormModal = ({ isOpen, onClose, eventToEdit = null }) => {
       });
       setSelectedVenueId(eventToEdit.venueId || null);
       setErrors({});
+      setRebuildTimeline(true);
     } else {
       // Default new event values
       const defaultDate = new Date();
@@ -74,6 +79,7 @@ export const EventFormModal = ({ isOpen, onClose, eventToEdit = null }) => {
       });
       setSelectedVenueId(null);
       setErrors({});
+      setRebuildTimeline(true);
     }
   }, [eventToEdit, isOpen]);
 
@@ -143,9 +149,21 @@ export const EventFormModal = ({ isOpen, onClose, eventToEdit = null }) => {
       : { venueId: undefined, venueName: undefined, venueEstCost: undefined };
 
     if (isEditing) {
-      updateEvent(eventToEdit.id, { ...formData, ...venueFields });
+      // Re-typed celebration? Rebuild the timeline milestones so the plan
+      // always matches the event type (user can opt out in the note above).
+      const timelineFields =
+        typeChanged && rebuildTimeline
+          ? { tasks: buildStarterTasks({ type: formData.type, date: formData.date }) }
+          : {};
+      updateEvent(eventToEdit.id, { ...formData, ...venueFields, ...timelineFields });
     } else {
-      addEvent({ ...formData, ...venueFields });
+      // New celebrations start with a type-aware starter timeline instead of
+      // an empty plan — dated relative to the chosen event date.
+      addEvent({
+        ...formData,
+        ...venueFields,
+        tasks: buildStarterTasks({ type: formData.type, date: formData.date }),
+      });
     }
     onClose();
   };
@@ -153,6 +171,8 @@ export const EventFormModal = ({ isOpen, onClose, eventToEdit = null }) => {
   // Editing and the date moved? Existing timeline tasks keep their original dates —
   // tell the user how to re-align them before they save.
   const dateChanged = isEditing && eventToEdit && formData.date && formData.date !== eventToEdit.date;
+  const typeChanged = isEditing && eventToEdit && formData.type && formData.type !== eventToEdit.type;
+  const existingTaskCount = eventToEdit?.tasks?.length || 0;
 
   return (
     <div
@@ -490,8 +510,38 @@ export const EventFormModal = ({ isOpen, onClose, eventToEdit = null }) => {
             />
           </div>
 
-          {/* Date-change guidance (edit mode only) */}
-          {dateChanged && (
+          {/* Timeline guidance + starter-task hints */}
+          {typeChanged && (
+            <div
+              role="note"
+              className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3"
+            >
+              <p className="flex items-start gap-2.5 text-xs leading-relaxed text-amber-900">
+                <RefreshCw className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" aria-hidden="true" />
+                <span>
+                  <span className="font-bold">Celebration type changed.</span> Your timeline still
+                  reflects the previous type — rebuild it so milestones match your new celebration.
+                </span>
+              </p>
+              <label className="mt-2.5 flex items-start gap-2.5 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={rebuildTimeline}
+                  onChange={(e) => setRebuildTimeline(e.target.checked)}
+                  className="mt-0.5 h-4 w-4 rounded border-amber-300 text-amber-600 focus:ring-amber-500"
+                />
+                <span className="text-xs font-semibold text-amber-900">
+                  Rebuild timeline milestones for this type
+                  {existingTaskCount > 0 ? (
+                    <span className="font-normal text-amber-800">
+                      {' '}(replaces {existingTaskCount} existing task{existingTaskCount === 1 ? '' : 's'} with a fresh checklist)
+                    </span>
+                  ) : null}
+                </span>
+              </label>
+            </div>
+          )}
+          {dateChanged && !typeChanged && (
             <div
               role="note"
               className="flex items-start gap-2.5 rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3"
@@ -502,6 +552,19 @@ export const EventFormModal = ({ isOpen, onClose, eventToEdit = null }) => {
                 their original dates — after saving, open{' '}
                 <span className="font-semibold">Timeline &amp; Tasks → Milestone Planner</span> to let AI
                 re-generate dated tasks for the new schedule, or shift them manually.
+              </p>
+            </div>
+          )}
+          {!isEditing && formData.date && (
+            <div
+              role="note"
+              className="flex items-start gap-2.5 rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3"
+            >
+              <Info className="w-4 h-4 text-sky-600 mt-0.5 shrink-0" aria-hidden="true" />
+              <p className="text-xs leading-relaxed text-sky-800">
+                On save, a <span className="font-bold">starter {EVENT_TYPES.find((t) => t.id === formData.type)?.label.toLowerCase() || 'celebration'} checklist</span> is
+                added to your timeline, dated for {formatShortDate(formData.date)} — edit it freely or let
+                AI regenerate a richer plan in the Timeline tab.
               </p>
             </div>
           )}
