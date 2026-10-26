@@ -119,6 +119,7 @@ const MainAppContent = () => {
         setCurrentTab={setCurrentTab}
         onOpenNewEvent={handleOpenNewEvent}
         onOpenApiKey={() => setIsApiKeyModalOpen(true)}
+        onEditCurrentEvent={handleEditCurrentEvent}
       />
 
       {/* Main Content Area */}

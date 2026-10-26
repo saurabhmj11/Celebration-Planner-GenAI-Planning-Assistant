@@ -16,6 +16,7 @@ import {
   Download,
   Copy,
   Trash2,
+  Pencil,
   Menu,
   X,
 } from 'lucide-react';
@@ -33,7 +34,7 @@ import { formatShortDate, formatCurrency } from '../../utils/formatters';
  * strip on top of the event switcher — ghost text through the translucent trigger and
  * clicks landing on the wrong control. A second row guarantees separation at any width.
  */
-export const Navbar = ({ currentTab, setCurrentTab, onOpenNewEvent, onOpenApiKey }) => {
+export const Navbar = ({ currentTab, setCurrentTab, onOpenNewEvent, onOpenApiKey, onEditCurrentEvent }) => {
   const {
     events,
     activeEventId,
@@ -335,7 +336,20 @@ export const Navbar = ({ currentTab, setCurrentTab, onOpenNewEvent, onOpenApiKey
                   })}
                 </div>
 
-                <div className="p-2 border-t border-slate-100 bg-slate-50/60 rounded-b-2xl">
+                <div className="p-2 border-t border-slate-100 bg-slate-50/60 rounded-b-2xl grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsDropdownOpen(false);
+                      onEditCurrentEvent?.();
+                    }}
+                    title="Edit the current celebration — date, guests, budget, venue"
+                    aria-label="Edit current celebration details"
+                    className="w-full py-2 px-3 text-xs font-semibold text-slate-700 bg-white border border-slate-200 hover:bg-slate-100 hover:border-slate-300 rounded-xl flex items-center justify-center gap-1.5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+                  >
+                    <Pencil className="w-3.5 h-3.5" aria-hidden="true" />
+                    Edit Current
+                  </button>
                   <button
                     type="button"
                     onClick={() => {
@@ -345,7 +359,7 @@ export const Navbar = ({ currentTab, setCurrentTab, onOpenNewEvent, onOpenApiKey
                     className="w-full py-2 px-3 text-xs font-semibold text-brand-800 bg-brand-100/70 hover:bg-brand-200/70 rounded-xl flex items-center justify-center gap-1.5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
                   >
                     <Plus className="w-3.5 h-3.5" aria-hidden="true" />
-                    Create New Celebration
+                    New Celebration
                   </button>
                 </div>
               </div>

@@ -1,4 +1,4 @@
-import { Wallet, Clock, Users, Sparkles, MapPinned } from 'lucide-react';
+import { Wallet, Clock, Users, Sparkles, MapPinned, CalendarClock } from 'lucide-react';
 
 export const QuickActionGrid = ({
   onAddExpense,
@@ -6,8 +6,17 @@ export const QuickActionGrid = ({
   onAddVendor,
   onOpenAiStudio,
   onFindVenue,
+  onEditEvent,
 }) => {
   const actions = [
+    {
+      label: 'Edit Plan',
+      description: 'Change date, guests, budget or venue',
+      icon: CalendarClock,
+      color: 'from-sky-600 to-indigo-600 text-sky-600 bg-sky-50 hover:bg-sky-100',
+      badge: 'Plan',
+      action: onEditEvent,
+    },
     {
       label: 'Add Expense',
       description: 'Record vendor invoice or deposit',
@@ -59,7 +68,7 @@ export const QuickActionGrid = ({
         </div>
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-3 xl:grid-cols-6 gap-3 sm:gap-4">
         {actions.map((act, index) => {
           const Icon = act.icon;
           return (

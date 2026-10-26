@@ -3,9 +3,9 @@ import { useModalFocus } from '../../hooks/useModalFocus';
 import { useEventContext } from '../../context/EventContext';
 import { EVENT_TYPES } from '../../data/defaultData';
 import { VENUES, VENUE_TYPES } from '../../data/venues';
-import { topVenueSuggestions } from '../../lib/venues/recommender';
+import { topVenueSuggestions, estimateVenueCost } from '../../lib/venues/recommender';
 import { formatCurrency } from '../../utils/formatters';
-import { X, Calendar, MapPin, Users, DollarSign, Clock, Sparkles, FileText, CheckCircle, MapPinned, AlertTriangle } from 'lucide-react';
+import { X, Calendar, MapPin, Users, DollarSign, Clock, Sparkles, FileText, CheckCircle, MapPinned, AlertTriangle, Info } from 'lucide-react';
 
 /** Share of the total budget assumed bookable for the venue. */
 const VENUE_BUDGET_SHARE = 0.35;
@@ -130,24 +130,29 @@ export const EventFormModal = ({ isOpen, onClose, eventToEdit = null }) => {
     e.preventDefault();
     if (!validate()) return;
 
-    if (isEditing) {
-      updateEvent(eventToEdit.id, formData);
-    } else {
-      const chosen = selectedVenueId ? VENUES.find((v) => v.id === selectedVenueId) : null;
-      const est = chosen
-        ? venueSuggestions.find((s) => s.venue.id === chosen.id)?.estCost ?? null
-        : null;
-      addEvent({
-        ...formData,
-        ...(chosen && {
+    // Venue metadata travels with the plan in BOTH modes:
+    //  - picked a match  -> venueId/Name/EstCost saved (est re-priced for the new guest count)
+    //  - typed own venue -> any stale venue fields are cleared so nothing drifts out of sync
+    const chosen = selectedVenueId ? VENUES.find((v) => v.id === selectedVenueId) : null;
+    const venueFields = chosen
+      ? {
           venueId: chosen.id,
           venueName: chosen.name,
-          venueEstCost: est,
-        }),
-      });
+          venueEstCost: estimateVenueCost(chosen, guests),
+        }
+      : { venueId: undefined, venueName: undefined, venueEstCost: undefined };
+
+    if (isEditing) {
+      updateEvent(eventToEdit.id, { ...formData, ...venueFields });
+    } else {
+      addEvent({ ...formData, ...venueFields });
     }
     onClose();
   };
+
+  // Editing and the date moved? Existing timeline tasks keep their original dates —
+  // tell the user how to re-align them before they save.
+  const dateChanged = isEditing && eventToEdit && formData.date && formData.date !== eventToEdit.date;
 
   return (
     <div
@@ -484,6 +489,22 @@ export const EventFormModal = ({ isOpen, onClose, eventToEdit = null }) => {
               className="w-full px-4 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-2xl focus:bg-white focus:ring-2 focus:ring-brand-500 outline-none transition-all resize-none placeholder:text-slate-400"
             />
           </div>
+
+          {/* Date-change guidance (edit mode only) */}
+          {dateChanged && (
+            <div
+              role="note"
+              className="flex items-start gap-2.5 rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3"
+            >
+              <Info className="w-4 h-4 text-sky-600 mt-0.5 shrink-0" aria-hidden="true" />
+              <p className="text-xs leading-relaxed text-sky-800">
+                <span className="font-bold">Date change detected.</span> Existing timeline tasks keep
+                their original dates — after saving, open{' '}
+                <span className="font-semibold">Timeline &amp; Tasks → Milestone Planner</span> to let AI
+                re-generate dated tasks for the new schedule, or shift them manually.
+              </p>
+            </div>
+          )}
 
           {/* Modal Actions */}
           <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
