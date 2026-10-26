@@ -71,3 +71,23 @@ Stage Summary:
 - Deliverable: fully enhanced, submission-ready Celebration & Event Planner — 114 passing tests, layered API security, WCAG 2.1 a11y patterns, 9/10 VLM-rated polished UI, live GenAI verified end-to-end.
 - Key new files: src/lib/{ai,security,validation}/*, src/hooks/useModalFocus.js, src/utils/formatters.js, src/components/common/StatusBadge.jsx, tests/** (11 suites), README.md, bunfig.toml.
 - All evaluation criteria now explicitly covered and documented in README.
+
+---
+Task ID: 3
+Agent: Main agent (Z.ai)
+Task: Fix the navigation bar layout and its functioning (user reported via screenshot showing truncated event title + ghost text in the top bar).
+
+Work Log:
+- Diagnosed with VLM screenshot analysis + DOM bounding-box measurement: root cause was the single-row header (~1440px of content: brand + event switcher + 6 tabs + 3 utility buttons) overflowing below ~1500px viewports; with `justify-between` and negative free space the tab strip slid LEFT and overlapped the event switcher by 246px at 1280px — nav labels bled through the trigger's translucent background (the "ghost text"), and clicks in the overlap zone hit nav buttons instead of the event dropdown. Secondary defects: mid-word event title truncation ("…Neon Synthwave Roof…"), AI Theme Studio button 9px taller than siblings, cramped right icon cluster.
+- Rewrote `src/components/common/Navbar.jsx` as a two-tier header:
+  - Tier 1 (h-16): brand + flexible centered event switcher (flex-1, sm:max-w-md, full title now fits) + uniform h-9 utility buttons (AI Settings / export / reset / hamburger).
+  - Tier 2 (h-12, lg+): the six primary tabs on their own row, uniform h-9 pill buttons, left-aligned — guarantees separation at every width (tabs need 660px, available 960px at tightest 1024px).
+  - Mobile (<lg): hamburger drawer unchanged visually, hardened behavior.
+- Functioning fixes: listbox keyboard support on the event switcher (ArrowDown opens & enters list, ArrowUp/Down cycles, Home/End jump, Escape closes + restores focus, focus returns to trigger after selecting an event); mobile drawer gains Escape close + focus restore, real outside-click close, and auto-close when resizing into lg; functional setState updates; `title` tooltip on the trigger for full event name; dropdown menu center-anchored so it can't overflow the mobile viewport.
+- A11y: replaced invalid mixed-content `role="listbox"`/`role="option"`/`aria-selected` with `aria-current="true"` on the active event option + `data-option` focus targets; kept aria-haspopup/expanded/current, focus-visible rings, sr-only status text; added `scroll-mt-20 lg:scroll-mt-28` to `<main>` in PlannerApp so the skip link clears the taller sticky header.
+- Verification: bun lint clean; all 114 tests pass; browser E2E at 1024/1280/1366/1440/1920px — zero overlap (tabs on own row, trigger 395-728 at 1024), all 6 tab heights uniform 36px, utilities fit at 390px (right edge 374); all 6 tabs switch content correctly; event switch verified end-to-end (switched to "Marcus's 30th Neon Synthwave Rooftop Party" — full title renders untruncated at 268px); arrow-key nav + Escape + focus restore verified in DOM; mobile drawer open/nav/close (nav click, Escape, real outside click) verified; no page errors; VLM re-inspection confirms ghost text gone, 8/10 polish.
+
+Stage Summary:
+- Fixed: nav no longer overlaps the event selector at any viewport; full event titles display; every nav control is clickable; dropdown and drawer are fully keyboard-operable (WCAG listbox pattern); uniform button heights across the bar.
+- Key file: src/components/common/Navbar.jsx (full two-tier restructure) + scroll-mt tweak in src/components/PlannerApp.jsx.
+- Verification artifacts: scripts/nav-fixed-{1024,1280,1440,mobile-390,mobile-drawer,marcus-1440,final-mobile}.png, scripts/vlm-nav-fixed.json.
