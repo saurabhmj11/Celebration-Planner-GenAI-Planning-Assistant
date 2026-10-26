@@ -2,11 +2,15 @@ import React, { createContext, useContext, useState, useEffect, useMemo, useCall
 import confetti from 'canvas-confetti';
 import { storageService } from '../services/storageService';
 import { INITIAL_EVENTS } from '../data/defaultData';
+import { makeId, sanitizeEvents } from '../utils/ids';
 
 const EventContext = createContext(null);
 
 export const EventProvider = ({ children }) => {
-  const [events, setEvents] = useState(() => storageService.getEvents());
+  // Sanitize on load: heals any data written by the old same-millisecond
+  // id bug (duplicate task/vendor/expense ids) so list keys and by-id
+  // mutations are always unique. Persisted back by the sync effect below.
+  const [events, setEvents] = useState(() => sanitizeEvents(storageService.getEvents()));
   const [activeEventId, setActiveEventIdState] = useState(() => storageService.getActiveEventId());
   const [apiKey, setApiKeyState] = useState(() => storageService.getApiKey());
   const [toast, setToast] = useState(null);
@@ -67,7 +71,7 @@ export const EventProvider = ({ children }) => {
 
   // ---------------- EVENT ACTIONS ----------------
   const addEvent = useCallback((eventData) => {
-    const newId = `event-${Date.now()}`;
+    const newId = makeId('event');
     const newEvent = {
       ...eventData,
       id: newId,
@@ -119,15 +123,15 @@ export const EventProvider = ({ children }) => {
     const source = events.find((e) => e.id === id);
     if (!source) return;
 
-    const dupId = `event-${Date.now()}`;
+    const dupId = makeId('event');
     const duplicated = {
       ...source,
       id: dupId,
       title: `${source.title} (Copy)`,
       createdAt: new Date().toISOString(),
-      expenses: source.expenses ? source.expenses.map(exp => ({ ...exp, id: `exp-${Date.now()}-${Math.random()}` })) : [],
-      tasks: source.tasks ? source.tasks.map(t => ({ ...t, id: `task-${Date.now()}-${Math.random()}`, completed: false })) : [],
-      vendors: source.vendors ? source.vendors.map(v => ({ ...v, id: `v-${Date.now()}-${Math.random()}` })) : [],
+      expenses: source.expenses ? source.expenses.map((exp) => ({ ...exp, id: makeId('exp') })) : [],
+      tasks: source.tasks ? source.tasks.map((t) => ({ ...t, id: makeId('task'), completed: false })) : [],
+      vendors: source.vendors ? source.vendors.map((v) => ({ ...v, id: makeId('v') })) : [],
     };
 
     setEvents((prev) => [duplicated, ...prev]);
@@ -148,7 +152,7 @@ export const EventProvider = ({ children }) => {
     if (!activeEvent) return;
     const newExpense = {
       ...expenseData,
-      id: `exp-${Date.now()}`,
+      id: makeId('exp'),
       allocated: Number(expenseData.allocated) || 0,
       spent: Number(expenseData.spent) || 0,
       paid: Boolean(expenseData.paid),
@@ -237,7 +241,7 @@ export const EventProvider = ({ children }) => {
     if (!activeEvent) return;
     const newTask = {
       ...taskData,
-      id: `task-${Date.now()}`,
+      id: makeId('task'),
       completed: Boolean(taskData.completed),
       priority: taskData.priority || 'medium',
       dueDate: taskData.dueDate || activeEvent.date || '',
@@ -255,6 +259,41 @@ export const EventProvider = ({ children }) => {
       })
     );
     showToast(`Added task "${newTask.title}"!`, 'success');
+  }, [activeEvent, showToast]);
+
+  /**
+   * Bulk-add milestone tasks in a SINGLE state update (AI Milestone Planner
+   * "Add Selected", future bulk flows). Ids are minted with makeId(), which
+   * stays unique inside the same millisecond — the old pattern of looping
+   * addTask minted identical `task-${Date.now()}` ids that duplicated React
+   * keys and made toggle/delete hit every copy at once.
+   * @returns {number} how many tasks were actually added.
+   */
+  const addTasks = useCallback((items) => {
+    if (!activeEvent || !Array.isArray(items) || items.length === 0) return 0;
+
+    const newTasks = items
+      .filter((t) => t && typeof t === 'object' && String(t.title || '').trim())
+      .map((t) => ({
+        ...t,
+        id: makeId('task'),
+        completed: Boolean(t.completed),
+        priority: t.priority || 'medium',
+        dueDate: t.dueDate || activeEvent.date || '',
+      }));
+
+    if (newTasks.length === 0) return 0;
+
+    setEvents((prev) =>
+      prev.map((e) => {
+        if (e.id === activeEvent.id) {
+          return { ...e, tasks: [...newTasks, ...(e.tasks || [])] };
+        }
+        return e;
+      })
+    );
+    showToast(`Added ${newTasks.length} milestone task${newTasks.length === 1 ? '' : 's'} to your timeline! ✨`, 'success');
+    return newTasks.length;
   }, [activeEvent, showToast]);
 
   const updateTask = useCallback((taskId, updatedFields) => {
@@ -323,7 +362,7 @@ export const EventProvider = ({ children }) => {
     if (!activeEvent) return;
     const newVendor = {
       ...vendorData,
-      id: `v-${Date.now()}`,
+      id: makeId('v'),
       cost: Number(vendorData.cost) || 0,
       status: vendorData.status || 'researching',
       rating: Number(vendorData.rating) || 5,
@@ -409,8 +448,8 @@ export const EventProvider = ({ children }) => {
       prev.map((e) => {
         if (e.id === activeEvent.id) {
           // Append theme decor highlights as suggestions to tasks if requested
-          const decorTasks = (theme.decorHighlights || []).map((highlight, idx) => ({
-            id: `task-theme-${Date.now()}-${idx}`,
+          const decorTasks = (theme.decorHighlights || []).map((highlight) => ({
+            id: makeId('task-theme'),
             title: `Theme Decor: ${highlight}`,
             phase: 'mid',
             category: 'decoration',
@@ -446,7 +485,7 @@ export const EventProvider = ({ children }) => {
     (jsonStr) => {
       const res = storageService.importData(jsonStr);
       if (res.success) {
-        setEvents(res.events);
+        setEvents(sanitizeEvents(res.events));
         setActiveEventIdState(res.events[0].id);
         showToast('Events successfully imported!', 'success');
         triggerConfetti();
@@ -483,6 +522,7 @@ export const EventProvider = ({ children }) => {
       toggleExpensePaid,
       // Timeline & Tasks CRUD
       addTask,
+      addTasks,
       updateTask,
       deleteTask,
       toggleTaskComplete,
@@ -516,6 +556,7 @@ export const EventProvider = ({ children }) => {
       deleteExpense,
       toggleExpensePaid,
       addTask,
+      addTasks,
       updateTask,
       deleteTask,
       toggleTaskComplete,

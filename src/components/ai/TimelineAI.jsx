@@ -20,7 +20,7 @@ const friendlyDate = (d) => {
  * to the event date; the user picks which tasks land on the real timeline.
  */
 export function TimelineAI() {
-  const { activeEvent, addTask, showToast } = useEventContext();
+  const { activeEvent, addTasks } = useEventContext();
   const { status, result, error, run, reset, isIdle, isLoading, isDone } = useAiRequest();
   const [selected, setSelected] = useState(new Set());
   const [addedCount, setAddedCount] = useState(0);
@@ -64,10 +64,10 @@ export function TimelineAI() {
 
   const handleAddSelected = () => {
     const tasks = result?.data?.tasks || [];
-    let added = 0;
+    const picked = [];
     tasks.forEach((t, i) => {
       if (!selected.has(i)) return;
-      addTask({
+      picked.push({
         title: t.title,
         notes: t.description ? `${t.description}\n\n(AI-suggested milestone)` : 'AI-suggested milestone',
         dueDate: t.dueDate,
@@ -76,10 +76,12 @@ export function TimelineAI() {
         phase: derivePhase(t.dueDate, eventDate),
         completed: false,
       });
-      added += 1;
     });
+    // Single bulk state update — one id per task, collision-proof even when
+    // they all land in the same millisecond (the old addTask loop minted
+    // identical `task-<Date.now()>` ids that duplicated React list keys).
+    const added = addTasks(picked);
     setAddedCount(added);
-    if (added > 0) showToast(`Added ${added} AI-suggested milestone${added === 1 ? '' : 's'} to your timeline! ✨`, 'success');
     reset();
   };
 

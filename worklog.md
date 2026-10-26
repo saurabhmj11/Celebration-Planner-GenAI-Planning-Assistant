@@ -200,3 +200,21 @@ Stage Summary:
 - Deliverable: the timeline now FOLLOWS the celebration type — new events start with a per-type starter checklist (never an empty plan), and changing a celebration's type offers a default-on rebuild with an explicit opt-out. All six event types have dedicated milestone templates; the deterministic seeding is instant and offline-safe, while the AI Milestone Planner remains available for richer, personalized regeneration.
 - Key files: src/lib/planning/starterPlan.js (new), src/components/events/EventFormModal.jsx (create seeding + type-change rebuild note/checkbox), src/services/assistOffline.js (+3 timeline templates), tests/planning/starterPlan.test.ts (new, 8 tests), README.md.
 - Verification artifacts: scripts/starter-create-modal.png, scripts/starter-timeline-birthday.png, scripts/starter-typechange-note.png.
+
+---
+Task ID: 9
+Agent: Main agent (Z.ai)
+Task: User reported console error "Encountered two children with the same key, `task-1793034912847`" (React duplicate-key warning in TimelineView).
+
+Work Log:
+- Root cause: TimelineAI "Add Selected" looped `addTask()` synchronously, and addTask minted ids as `task-${Date.now()}` (millisecond resolution). Adding 2+ AI tasks in one click produced IDENTICAL ids — duplicating React list keys AND making toggleTaskComplete/deleteTask/updateTask act on every copy at once (verified the key format `task-1793034912847` has no index suffix → addTask, not buildStarterTasks which appends `-i`).
+- Built `src/utils/ids.js`: `makeId(prefix)` = timestamp + process-lifetime monotonic counter (unique even thousands of calls inside one millisecond); `dedupeById(list)` keep-first repair; `sanitizeEvent/sanitizeEvents` heal events whose tasks/vendors/expenses contain duplicate or missing ids (clean events returned by reference).
+- EventContext: events state now sanitizes on load (heals the user's already-corrupted localStorage) and on import; ALL id minting switched to makeId (addEvent, duplicateEvent per-item maps, addTask, addExpense, addVendor, applyThemeToEvent decor tasks); NEW bulk `addTasks(items)` action — single setEvents update, per-item collision-proof ids, one toast, returns count — exposed on the context.
+- TimelineAI: `handleAddSelected` now builds the picked payload array and calls `addTasks` once instead of looping addTask (which also fired one toast per task).
+- Tests: new `tests/utils/ids.test.ts` (11 tests): 1000-call uniqueness, frozen-clock same-ms uniqueness + counter reset, keep-first dedupe with order, fresh ids for missing-id items, no-mutation, regression fixture collapsing the exact reported `task-1793034912847` duplicate, vendor/expense repair, clean-event referential identity, sanitizeEvents mapping. Full suite 189 pass (was 178), 0 fail; `bun run lint` clean.
+- E2E (agent-browser): injected an event containing TWO `task-1793034912847` tasks into localStorage → reload → healed to 2 unique tasks with ZERO console/page errors (the reported warning is gone); live GLM Milestone Planner → "Add Selected (10)" → 12 tasks ALL unique (`task-<same-ms>-0`…`-9`) proving same-millisecond uniqueness in the real flow; toggle → exactly 1/12 completed; delete → exactly one removed; manual TaskFormModal add → unique id, no regressions; sample data reset to pristine 3 events; screenshots scripts/dupefix-*.png.
+
+Stage Summary:
+- Deliverable: duplicate React keys eliminated at both ends — new ids can never collide (makeId counter + bulk addTasks single-update), and any data already corrupted by the old bug self-heals on the next page load (sanitize-on-load/import collapses duplicate ids, keeping the first occurrence). By-id toggle/delete/update now act on exactly one task, AI bulk adds fire one state update + one toast.
+- Key files: src/utils/ids.js (new), src/context/EventContext.jsx, src/components/ai/TimelineAI.jsx, tests/utils/ids.test.ts (new).
+- Verification artifacts: scripts/dupefix-timeline-bulk-added.png, scripts/dupefix-final-timeline.png.
