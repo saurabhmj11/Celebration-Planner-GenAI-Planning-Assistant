@@ -10,6 +10,9 @@
  *  - timeline-plan   : personalized milestone/task plan relative to the event date
  *  - vendor-plan     : missing vendor categories + questions to ask vendors
  *  - vendor-inquiry  : personalized outreach message draft for one vendor
+ *  - venue-recommend  : AI venue scout — rationale + negotiation tips for an
+ *                       algorithm-ranked venue shortlist (anti-hallucination:
+ *                       only ids from the curated catalog are accepted back)
  *  - plan-review     : score + strengths + risks + next actions for the whole plan
  *  - assistant-chat  : context-aware conversational planning helper
  */
@@ -98,6 +101,41 @@ const vendorInquirySchema = z
   })
   .strip();
 
+const venueRecommendSchema = z
+  .object({
+    task: z.literal("venue-recommend"),
+    payload: z
+      .object({
+        eventType: eventTypeEnum,
+        eventTitle: shortText(120).optional(),
+        eventDate: safeDate.optional(),
+        guestCount: z.number().int().min(0).max(100_000),
+        venueBudget: z.number().min(0).max(100_000_000),
+        preferences: z.array(shortText(40)).max(8).optional(),
+        query: shortText(300).optional(),
+        candidates: z
+          .array(
+            z
+              .object({
+                id: shortText(60),
+                name: shortText(100),
+                type: shortText(40),
+                area: shortText(100).optional(),
+                tags: z.array(shortText(40)).max(14),
+                capacityMax: z.number().int().min(1),
+                rating: z.number().min(0).max(5),
+                score: z.number().min(0).max(100),
+                estCost: z.number().min(0),
+              })
+              .strip()
+          )
+          .min(1)
+          .max(6),
+      })
+      .strip(),
+  })
+  .strip();
+
 const planReviewSchema = z
   .object({
     task: z.literal("plan-review"),
@@ -157,6 +195,7 @@ export const assistRequestSchema = z.discriminatedUnion("task", [
   timelinePlanSchema,
   vendorPlanSchema,
   vendorInquirySchema,
+  venueRecommendSchema,
   planReviewSchema,
   assistantChatSchema,
 ]);
@@ -168,6 +207,7 @@ export const ASSIST_TASKS = [
   "timeline-plan",
   "vendor-plan",
   "vendor-inquiry",
+  "venue-recommend",
   "plan-review",
   "assistant-chat",
 ] as const;

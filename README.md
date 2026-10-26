@@ -10,7 +10,7 @@ Planning a celebration is fragmented: budgets live in spreadsheets, vendors in c
 
 | Problem Requirement | Delivered |
 |---|---|
-| GenAI-powered planning assistant | Six live GenAI capabilities across every module via `/api/ai/themes` + `/api/ai/assist` (z-ai-web-dev-sdk / GLM): AI Theme Studio, Budget Copilot, Milestone Planner, Vendor Advisor & inquiry drafts, Plan Review, and the floating Planning Assistant chat |
+| GenAI-powered planning assistant | **Seven live GenAI capabilities across every module** via `/api/ai/themes` + `/api/ai/assist` (z-ai-web-dev-sdk / GLM): AI Theme Studio, Budget Copilot, Milestone Planner, Vendor Advisor & inquiry drafts, **AI Venue Finder venue scout (with a deterministic recommendation algorithm + interactive photo map)**, Plan Review, and the floating Planning Assistant chat |
 | Weddings · Birthdays · Community events | Type-aware presets, per-type hero gradients, tailored sample blueprints for each of the three event categories |
 | Budgets | Smart budget planner with 8 expense categories, allocated-vs-spent math, live over-budget warnings, per-guest cost analytics |
 | Timelines | Phased milestone timeline (3+ months → day-of → wrap-up) with urgency badges and completion tracking |
@@ -43,12 +43,21 @@ Planning a celebration is fragmented: budgets live in spreadsheets, vendors in c
 - One-click **Apply to Event** writes the theme palette and injects 4 decor milestones into the timeline.
 - **Triple-tier resilience**: built-in server GLM engine → optional user-supplied Gemini key → instant curated offline engine. The app never fails closed.
 
-### 6. AI Everywhere — five more GenAI copilots
+### 6. AI Everywhere — six more GenAI copilots
 - **AI Budget Copilot** (Budget tab): a personalized allocation plan with % bars, dollar amounts and saving tips — applicable as real budget lines in one click.
 - **AI Milestone Planner** (Timeline tab): drafts a full task plan sized to the real runway (dates clamped to the event date), previewed with per-task checkboxes before anything is saved.
 - **AI Vendor Advisor** (Vendors tab): vendor-gap analysis with realistic cost ranges, the six must-ask questions, one-click "add as vendor rows", and AI-drafted outreach emails per vendor with copy-to-clipboard.
 - **AI Plan Review** (Dashboard): a 0–100 readiness audit — strengths, risks, and prioritized next actions computed from the real budget, task and vendor data.
 - **AI Planning Assistant** (floating, every tab): a context-aware chat that knows the active event's budget, runway, tasks and vendors, with suggested follow-ups and multi-turn memory.
+
+### 7. AI Venue Finder (GenAI + recommendation algorithm + map) 🗺️
+- **Deterministic recommendation algorithm** (`src/lib/venues/recommender.ts`, pure & unit-tested) ranks **16 curated venues** for the active event with a weighted multi-factor score: event-type affinity (30%), capacity fit with overflow warnings (22%), budget-fit against a configurable venue budget slice (22%), style preference matching (16%, adaptive up to 28% when the user states an explicit wish), and rating boost (8%) — every score shows its factor breakdown on the card, so nothing is a black box.
+- **Natural-language preference parsing**: type "a lakeside hotel resort near the water" and the parser expands keyword synonym families (lake → lakeside/waterfront/marina/beach…) into matchable concepts; matching venues light up on the map while non-matches dim.
+- **Interactive venue map** (Leaflet + OpenStreetMap, no API key): every pin embeds the venue's real photo; hovering a pin opens an image card (photo, match %, estimated cost, warnings), clicking selects the venue and syncs the card list; hovering a card enlarges its pin.
+- **Photo galleries on hover**: each venue card reveals its 2-photo gallery with quick facts and actions on hover (and on keyboard focus — fully accessible).
+- **Live GenAI venue scout** (`venue-recommend` task): the algorithm's top-5 shortlist is sent to the server GLM engine, which writes a personalized why-it-fits rationale, a per-venue negotiation tip and three booking tips — grounded, because the normalizer drops any hallucinated venue id that wasn't in the shortlist.
+- **Booking writes the plan**: one click sets the event location and venue fields, adds the venue as a vendor row, and creates the matching budget line — venue, budget and vendor tabs update instantly.
+- **Booking flow integration**: while creating a new event, the modal's "Smart venue matches" panel re-ranks 3 live suggestions as you change celebration type, guest count or budget; picking one auto-fills the location and persists the venue + estimated cost on the event.
 
 ---
 
@@ -56,9 +65,12 @@ Planning a celebration is fragmented: budgets live in spreadsheets, vendors in c
 
 | Service | Where it is used |
 |---|---|
-| **z-ai-web-dev-sdk (GLM, server-side only)** | `src/app/api/ai/themes/route.ts` — AI Theme Studio (strict-JSON theme concepts, per-event personalization, single-retry on malformed output) · `src/app/api/ai/assist/route.ts` — the unified assist engine powering **six more capabilities**: `budget-plan`, `timeline-plan`, `vendor-plan`, `vendor-inquiry`, `plan-review`, `assistant-chat` |
+| **z-ai-web-dev-sdk (GLM, server-side only)** | `src/app/api/ai/themes/route.ts` — AI Theme Studio (strict-JSON theme concepts, per-event personalization, single-retry on malformed output) · `src/app/api/ai/assist/route.ts` — the unified assist engine powering **seven capabilities**: `budget-plan`, `timeline-plan`, `vendor-plan`, `vendor-inquiry`, `venue-recommend` (AI Venue Finder's live venue scout — grounded on the algorithm's shortlist, hallucinated venue ids are dropped), `plan-review`, `assistant-chat` |
 | **Google Gemini API (optional, BYO key)** | `src/services/geminiService.js` — users can plug their own Gemini key in AI Settings; the app calls it directly from the server layer |
 | **Smart Offline Planning Engines** | `src/services/assistOffline.js` + curated theme catalog — parameter-driven fallbacks for every AI surface when live generation is unavailable, so no AI panel ever fails closed |
+| **ZAI Image Search (venue photography)** | Real venue photos sourced via the ZAI image-search service and bundled as compressed WebP galleries + map pins in `public/venues/` (2.4 MB total) |
+| **Venue recommendation algorithm (deterministic)** | `src/lib/venues/recommender.ts` — explainable multi-factor scoring (event-type fit, capacity, budget, style synonyms, rating) over the 16-venue curated catalog (`src/data/venues.js`); feeds the GenAI shortlist so recommendations are grounded, testable and never hallucinated |
+| **Leaflet + OpenStreetMap (no API key)** | `src/components/venues/VenueMap.jsx` — interactive map with photo pins, hover image popups, preference dimming and selection sync |
 
 The AI service is **never called from the client**; all GenAI traffic flows through validated server routes.
 
@@ -102,10 +114,10 @@ Server routes: /api/ai/themes + /api/ai/assist → z-ai-web-dev-sdk (GLM)
 - **Lazy-loaded** heavy print/summary surface via `next/dynamic` with a loading state.
 - Optimistic local-first persistence (localStorage) — instant UI, zero network on the critical path.
 
-## 🧪 Testing — 147 tests, all passing
+## 🧪 Testing — 170 tests, all passing
 
 ```bash
-bun test        # 147 unit + integration tests across 13 suites
+bun test        # 170 unit + integration tests across 14 suites
 bun run lint    # ESLint (Next.js + TypeScript rules)
 ```
 
@@ -117,8 +129,9 @@ Coverage includes:
 | `tests/timeline.test.ts` | Progress stats, urgency bands with deterministic reference dates, calendar-overflow rejection |
 | `tests/vendor.test.ts` | Booked counting (booked + deposit_paid), cost aggregation, negative-value immunity |
 | `tests/api/themes-route.test.ts` | **Full AI route pipeline** via an injected fake engine: happy path, retry-on-malformed, upstream failure, 400/413/429, per-client rate limits, stack-trace leak prevention |
-| `tests/api/assist-route.test.ts` | **All six assist tasks** through the full pipeline: per-task happy paths, normalization (percent rescale, date clamping, score clamping), 400/405/413/429, retry-on-garbage, stack-leak prevention |
-| `tests/ai/assistOffline.test.ts` | Smart Offline Engines: allocation sums, date-window safety, category-overlap exclusion, coordinator fallback, score bounds, chat intent routing |
+| `tests/api/assist-route.test.ts` | **All seven assist tasks** through the full pipeline: per-task happy paths, normalization (percent rescale, date clamping, score clamping, venue-id anti-hallucination), 400/405/413/429, retry-on-garbage, stack-leak prevention |
+| `tests/venues/recommender.test.ts` | **Venue recommendation algorithm**: cost estimation (base + per-guest + fee), capacity overflow warnings, budget falloff, NL synonym parsing ("hotel resort near the lake" → lakeside resorts), concept-level style matching, adaptive weights, deterministic ranking, catalog integrity, and the exact user stories the feature promises |
+| `tests/ai/assistOffline.test.ts` | Smart Offline Engines: allocation sums, date-window safety, category-overlap exclusion, coordinator fallback, score bounds, venue-scout rationale + over-budget flags, chat intent routing |
 | `tests/ai/*` | LLM JSON extraction (fences, prose, escapes), theme normalization (hex repair, control-char stripping, list caps) |
 | `tests/security/*` | Rate limiter (allow/block/reset/per-client), sanitization helpers |
 | `tests/storageService.test.ts` | Persistence resilience + hostile-import rejection |

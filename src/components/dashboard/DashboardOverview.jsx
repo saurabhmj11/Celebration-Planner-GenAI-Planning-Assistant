@@ -100,6 +100,7 @@ const DashboardOverviewComponent = ({
         onAddTask={onOpenTaskModal}
         onAddVendor={onOpenVendorModal}
         onOpenAiStudio={() => onNavigate('ai')}
+        onFindVenue={() => onNavigate('venues')}
         onOpenPrint={() => onNavigate('print')}
         onEditEvent={onEditEvent}
       />

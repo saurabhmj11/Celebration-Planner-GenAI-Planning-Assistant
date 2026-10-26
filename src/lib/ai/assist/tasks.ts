@@ -313,6 +313,102 @@ ${JSON_RULES}`,
 };
 
 /* ------------------------------------------------------------------ */
+/* 4b. Venue recommendation (hybrid: algorithm shortlist + GenAI rationale) */
+/* ------------------------------------------------------------------ */
+
+export interface VenueRecommendResult {
+  summary: string;
+  venues: {
+    id: string;
+    whyItFits: string;
+    negotiationTip: string;
+    costSuggestion?: string;
+  }[];
+  tips: string[];
+}
+
+const venueTask: AssistTask<
+  Extract<AssistRequest, { task: "venue-recommend" }>["payload"],
+  VenueRecommendResult
+> = {
+  systemHint: "venue scouting, site-visit strategy and vendor negotiation",
+  buildUserPrompt: (p) => `
+You are an expert venue scout. The app's recommendation algorithm pre-ranked a shortlist for a ${p.eventType}${
+    p.eventTitle ? ` ("${p.eventTitle}"${p.eventDate ? ` on ${p.eventDate}` : ""})` : ""
+  } with ${p.guestCount} guests and a venue budget of $${Math.round(p.venueBudget)}.
+${p.preferences?.length ? `User's style preferences: ${p.preferences.map((t) => str(t, 40)).join(", ")}.` : ""}
+${p.query ? `User's venue wish (free text): "${str(p.query, 300)}"` : ""}
+
+Algorithm shortlist (already computed — do NOT invent new venues, only reference these):
+${p.candidates
+  .map(
+    (c) =>
+      `- id: ${c.id} | ${c.name} (${c.type}${c.area ? `, ${c.area}` : ""}) | tags: ${c.tags.join(
+        ", "
+      )} | seats up to ${c.capacityMax} | rating ${c.rating} | match score ${c.score}/100 | estimated cost $${Math.round(c.estCost)}`
+  )
+  .join("\n")}
+
+Respond strictly in valid JSON matching exactly this schema:
+{
+  "summary": "One-sentence verdict on the best pick and why (under 200 chars)",
+  "venues": [
+    { "id": "the candidate id exactly as listed", "whyItFits": "Why THIS venue fits this specific event, guests, budget and style (under 180 chars)", "negotiationTip": "A specific negotiation or booking tactic for this venue type (under 160 chars)", "costSuggestion": "What is/isn't typically included at this price point (under 120 chars)" }
+  ],
+  "tips": ["Venue-booking tip: hidden fees to ask about, timing, deposits, rain plans (under 160 chars)"]
+}
+Rules:
+- Cover 3 to ${p.candidates.length} venues from the shortlist — include the top algorithm pick and at least one cheaper alternative.
+- Every "id" must be copied EXACTLY from the shortlist above; never invent ids.
+- "whyItFits" must reference real numbers from this request (guests, budget, tags).
+- Exactly 3 general tips.
+${JSON_RULES}`,
+  normalize: (parsed) => {
+    if (typeof parsed !== "object" || parsed === null) return null;
+    const obj = parsed as Record<string, unknown>;
+    // Valid ids are injected onto the parsed payload by the route via
+    // withVenueCandidateIds() — same pattern as the timeline _ceiling tag.
+    const rawValidIds = Array.isArray(obj._validVenueIds) ? obj._validVenueIds : [];
+    const validIds = new Set(rawValidIds.map((i) => String(i)));
+    const rawVenues = Array.isArray(obj.venues) ? obj.venues : [];
+
+    // Anti-hallucination: drop anything whose id isn't in the request's shortlist.
+    const seen = new Set<string>();
+    const venues = rawVenues
+      .map((v) => {
+        if (typeof v !== "object" || v === null) return null;
+        const rec = v as Record<string, unknown>;
+        const id = str(rec.id, 60);
+        if (!id || !validIds.has(id) || seen.has(id)) return null;
+        const whyItFits = str(rec.whyItFits, 240);
+        if (!whyItFits) return null;
+        seen.add(id);
+        return {
+          id,
+          whyItFits,
+          negotiationTip: str(rec.negotiationTip, 220) || "Ask for an all-inclusive quote to avoid hidden fees.",
+          costSuggestion: str(rec.costSuggestion, 160) || undefined,
+        };
+      })
+      .filter((v): v is VenueRecommendResult["venues"][number] => v !== null)
+      .slice(0, 6);
+
+    const summary = str(obj.summary, 280);
+    // Without id-tagging the filter above drops everything, so a missing tag
+    // fails the whole response -> route retry. Conservative by design:
+    // venue insights are only served when grounding is certain.
+    if (!summary || venues.length < 1) return null;
+    const tips = strList(obj.tips, 5, 200);
+
+    return {
+      summary,
+      venues,
+      tips: tips.length > 0 ? tips : ["Ask each venue for an itemized all-in quote including service fees and overtime."],
+    };
+  },
+};
+
+/* ------------------------------------------------------------------ */
 /* 5. Plan review                                                     */
 /* ------------------------------------------------------------------ */
 
@@ -450,6 +546,7 @@ export const ASSIST_TASK_REGISTRY = {
   "timeline-plan": timelineTask,
   "vendor-plan": vendorTask,
   "vendor-inquiry": inquiryTask,
+  "venue-recommend": venueTask,
   "plan-review": reviewTask,
   "assistant-chat": chatTask,
 } as const;
@@ -467,6 +564,17 @@ Your advice is warm, concrete, budget-aware, and instantly actionable.`;
 export function withTimelineCeiling(parsed: unknown, ceilingDate: string): unknown {
   if (typeof parsed === "object" && parsed !== null) {
     return { ...(parsed as Record<string, unknown>), _ceiling: ceilingDate };
+  }
+  return parsed;
+}
+
+/**
+ * Tag a parsed venue-recommend response with the shortlist ids the model was
+ * given, so the normalizer can drop any hallucinated venue id.
+ */
+export function withVenueCandidateIds(parsed: unknown, candidateIds: string[]): unknown {
+  if (typeof parsed === "object" && parsed !== null) {
+    return { ...(parsed as Record<string, unknown>), _validVenueIds: candidateIds };
   }
   return parsed;
 }

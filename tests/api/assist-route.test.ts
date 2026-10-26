@@ -271,6 +271,89 @@ describe("POST /api/ai/assist — happy paths", () => {
     const userPrompt = state.calls[0][1].content;
     expect(userPrompt).toContain("User: budget?");
   });
+
+  test("venue-recommend enriches the shortlist and drops hallucinated ids", async () => {
+    state.responses = [
+      {
+        content: fenced({
+          summary: "Emerald Bay leads: lakeside resort fit for 100 anniversary guests inside budget.",
+          venues: [
+            {
+              id: "emerald-bay-resort",
+              whyItFits: "Waterfront rooms + pool pavilion host 100 guests with rooms for all.",
+              negotiationTip: "Ask to waive the site fee for a Sunday anniversary brunch.",
+              costSuggestion: "Includes tables/chairs; catering is separate.",
+            },
+            {
+              id: "grand-azure-resort",
+              whyItFits: "Downtown resort ballroom with lake terrace and spa packages.",
+              negotiationTip: "Bundle guest-room block for a venue-fee credit.",
+            },
+            {
+              id: "totally-made-up-venue", // hallucination — must be dropped
+              whyItFits: "Looks great!",
+              negotiationTip: "Pay cash.",
+            },
+          ],
+          tips: [
+            "Ask for an itemized all-in quote.",
+            "Sundays are 20% cheaper.",
+            "Deposit terms in writing.",
+          ],
+        }),
+      },
+    ];
+
+    const res = await POST(
+      makeRequest({
+        task: "venue-recommend",
+        payload: {
+          eventType: "anniversary",
+          eventTitle: "25th Lakeside Anniversary",
+          guestCount: 100,
+          venueBudget: 15000,
+          preferences: ["lakeside", "resort"],
+          query: "a hotel resort near the lake",
+          candidates: [
+            {
+              id: "emerald-bay-resort",
+              name: "Emerald Bay Waterfront Resort",
+              type: "resort",
+              tags: ["resort", "lakeside", "luxury"],
+              capacityMax: 350,
+              rating: 4.8,
+              score: 92,
+              estCost: 14300,
+            },
+            {
+              id: "grand-azure-resort",
+              name: "Grand Azure Resort & Spa",
+              type: "resort",
+              tags: ["resort", "hotel", "lakeside"],
+              capacityMax: 420,
+              rating: 4.7,
+              score: 88,
+              estCost: 16500,
+            },
+          ],
+        },
+      })
+    );
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.task).toBe("venue-recommend");
+    expect(body.data.venues.length).toBe(2); // hallucinated id dropped
+    expect(body.data.venues.map((v: { id: string }) => v.id)).toEqual([
+      "emerald-bay-resort",
+      "grand-azure-resort",
+    ]);
+    expect(body.data.tips.length).toBe(3);
+    // The prompt must embed the algorithm shortlist (grounding).
+    const userPrompt = state.calls[0][1].content;
+    expect(userPrompt).toContain("emerald-bay-resort");
+    expect(userPrompt).toContain("match score 92/100");
+  });
 });
 
 /* ------------------------------------------------------------------ */
@@ -297,6 +380,16 @@ describe("POST /api/ai/assist — guard rails", () => {
     expect(res.status).toBe(400);
     const body = await res.json();
     expect(Object.keys(body.fields).length).toBeGreaterThan(0);
+  });
+
+  test("400s venue-recommend without candidates", async () => {
+    const res = await POST(
+      makeRequest({
+        task: "venue-recommend",
+        payload: { eventType: "wedding", guestCount: 100, venueBudget: 5000, candidates: [] },
+      })
+    );
+    expect(res.status).toBe(400);
   });
 
   test("400s unparseable JSON bodies", async () => {

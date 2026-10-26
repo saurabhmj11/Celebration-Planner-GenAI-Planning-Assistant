@@ -1,10 +1,11 @@
-import { Wallet, Clock, Users, Sparkles } from 'lucide-react';
+import { Wallet, Clock, Users, Sparkles, MapPinned } from 'lucide-react';
 
 export const QuickActionGrid = ({
   onAddExpense,
   onAddTask,
   onAddVendor,
   onOpenAiStudio,
+  onFindVenue,
 }) => {
   const actions = [
     {
@@ -39,6 +40,14 @@ export const QuickActionGrid = ({
       badge: 'GenAI',
       action: onOpenAiStudio,
     },
+    {
+      label: 'AI Venue Finder',
+      description: 'Ranked venues + map, photos & booking',
+      icon: MapPinned,
+      color: 'from-brand-500 to-fuchsia-500 text-brand-600 bg-brand-50 hover:bg-brand-100',
+      badge: 'New',
+      action: onFindVenue,
+    },
   ];
 
   return (
@@ -50,7 +59,7 @@ export const QuickActionGrid = ({
         </div>
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
         {actions.map((act, index) => {
           const Icon = act.icon;
           return (

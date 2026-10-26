@@ -16,6 +16,7 @@ import {
   offlineBudgetPlan,
   offlinePlanReview,
   offlineTimelinePlan,
+  offlineVenueRecommend,
   offlineVendorPlan,
   offlineVendorInquiry,
 } from './assistOffline.js';
@@ -90,6 +91,10 @@ export const aiAssist = {
 
   vendorInquiry(payload) {
     return runTask('vendor-inquiry', payload, offlineVendorInquiry);
+  },
+
+  venueRecommend(payload) {
+    return runTask('venue-recommend', payload, offlineVenueRecommend);
   },
 
   planReview(payload) {

@@ -1,8 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useModalFocus } from '../../hooks/useModalFocus';
 import { useEventContext } from '../../context/EventContext';
 import { EVENT_TYPES } from '../../data/defaultData';
-import { X, Calendar, MapPin, Users, DollarSign, Clock, Sparkles, FileText, CheckCircle } from 'lucide-react';
+import { VENUES } from '../../data/venues';
+import { topVenueSuggestions } from '../../lib/venues/recommender';
+import { formatCurrency } from '../../utils/formatters';
+import { X, Calendar, MapPin, Users, DollarSign, Clock, Sparkles, FileText, CheckCircle, MapPinned } from 'lucide-react';
 
 export const EventFormModal = ({ isOpen, onClose, eventToEdit = null }) => {
   const { addEvent, updateEvent } = useEventContext();
@@ -22,6 +25,7 @@ export const EventFormModal = ({ isOpen, onClose, eventToEdit = null }) => {
   });
 
   const [errors, setErrors] = useState({});
+  const [selectedVenueId, setSelectedVenueId] = useState(null);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -37,6 +41,7 @@ export const EventFormModal = ({ isOpen, onClose, eventToEdit = null }) => {
         description: eventToEdit.description || '',
         notes: eventToEdit.notes || '',
       });
+      setSelectedVenueId(eventToEdit.venueId || null);
       setErrors({});
     } else {
       // Default new event values
@@ -53,9 +58,30 @@ export const EventFormModal = ({ isOpen, onClose, eventToEdit = null }) => {
         description: '',
         notes: '',
       });
+      setSelectedVenueId(null);
       setErrors({});
     }
   }, [eventToEdit, isOpen]);
+
+  // Live AI-style venue suggestions driven by the recommendation algorithm —
+  // they reshuffle as the user changes celebration type, guests or budget.
+  const venueSuggestions = useMemo(() => {
+    const guests = Math.max(1, Number(formData.guestCount) || 0);
+    const budget = Math.max(0, Number(formData.budget) || 0);
+    return topVenueSuggestions(VENUES, {
+      eventType: formData.type,
+      guestCount: guests,
+      venueBudget: Math.round(budget * 0.35), // venue ~35% of total budget
+    }, 3);
+  }, [formData.type, formData.guestCount, formData.budget]);
+
+  const applyVenueSuggestion = (scored) => {
+    setSelectedVenueId(scored.venue.id);
+    setFormData((prev) => ({
+      ...prev,
+      location: `${scored.venue.name} — ${scored.venue.area}`,
+    }));
+  };
 
   // Escape-close + focus trap + focus restore (shared modal a11y hook)
   const panelRef = useModalFocus(isOpen, onClose);
@@ -80,7 +106,18 @@ export const EventFormModal = ({ isOpen, onClose, eventToEdit = null }) => {
     if (isEditing) {
       updateEvent(eventToEdit.id, formData);
     } else {
-      addEvent(formData);
+      const chosen = selectedVenueId ? VENUES.find((v) => v.id === selectedVenueId) : null;
+      const est = chosen
+        ? venueSuggestions.find((s) => s.venue.id === chosen.id)?.estCost ?? null
+        : null;
+      addEvent({
+        ...formData,
+        ...(chosen && {
+          venueId: chosen.id,
+          venueName: chosen.name,
+          venueEstCost: est,
+        }),
+      });
     }
     onClose();
   };
@@ -207,13 +244,72 @@ export const EventFormModal = ({ isOpen, onClose, eventToEdit = null }) => {
             <input
               type="text"
               value={formData.location}
-              onChange={(e) => setFormData({ ...formData, location: e.target.value })}
-              placeholder="e.g. Grand Vista Vineyard Estate, 120 Napa Valley Way"
+              onChange={(e) => {
+                if (selectedVenueId) setSelectedVenueId(null);
+                setFormData({ ...formData, location: e.target.value });
+              }}
+              placeholder="e.g. Grand Vista Vineyard Estate, 120 Napa Valley Way — or pick an AI match below"
               className={`w-full px-4 py-3 text-sm bg-slate-50 border rounded-2xl focus:bg-white focus:ring-2 focus:ring-brand-500 outline-none transition-all ${
                 errors.location ? 'border-rose-400 bg-rose-50/50' : 'border-slate-200'
               }`}
             />
             {errors.location && <p className="text-xs text-rose-500 mt-1">{errors.location}</p>}
+          </div>
+
+          {/* AI venue suggestions — live from the recommendation algorithm */}
+          <div className="rounded-2xl border border-amber-200/80 bg-gradient-to-br from-amber-50/90 to-orange-50/70 p-4">
+            <p className="flex items-center gap-1.5 text-[11px] font-extrabold text-amber-800 uppercase tracking-wider">
+              <MapPinned className="w-4 h-4" aria-hidden="true" />
+              Smart venue matches
+              <span className="font-semibold normal-case tracking-normal text-amber-700">
+                — ranked live for this type, guest count & budget (venue ≈ 35% of budget)
+              </span>
+            </p>
+            <div className="mt-3 grid gap-2.5 sm:grid-cols-3" role="group" aria-label="AI venue suggestions">
+              {venueSuggestions.map(({ venue, score, estCost }) => {
+                const chosen = selectedVenueId === venue.id;
+                return (
+                  <button
+                    key={venue.id}
+                    type="button"
+                    aria-pressed={chosen}
+                    onClick={() => applyVenueSuggestion({ venue, estCost })}
+                    className={`group text-left rounded-2xl border overflow-hidden transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 ${
+                      chosen
+                        ? 'border-amber-400 ring-2 ring-amber-400/40 shadow-md'
+                        : 'border-slate-200/80 bg-white hover:border-amber-300 hover:shadow-sm'
+                    }`}
+                  >
+                    <div className="relative h-20">
+                      <img
+                        src={venue.images[0]}
+                        alt={`${venue.name} venue photo`}
+                        className="h-full w-full object-cover"
+                      />
+                      <span className="absolute top-1.5 left-1.5 text-[10px] font-extrabold text-white bg-emerald-500 rounded-full px-1.5 py-0.5 shadow">
+                        {Math.round(score)}% match
+                      </span>
+                      {chosen && (
+                        <span className="absolute inset-0 bg-emerald-600/25 flex items-center justify-center">
+                          <CheckCircle className="w-6 h-6 text-white drop-shadow" aria-hidden="true" />
+                        </span>
+                      )}
+                    </div>
+                    <div className="p-2.5">
+                      <p className="text-xs font-bold text-slate-800 leading-tight truncate">{venue.name}</p>
+                      <p className="text-[11px] font-semibold text-brand-700 mt-0.5">
+                        ≈ {formatCurrency(estCost)} · {venue.capacity.min}–{venue.capacity.max} guests
+                      </p>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+            <p className="text-[11px] text-amber-700/90 mt-2.5">
+              {selectedVenueId
+                ? 'Venue applied to Location — edit any detail and the budget line updates after saving.'
+                : 'Pick one to auto-fill the location, or type your own — suggestions re-rank as you adjust guests & budget.'}
+            </p>
           </div>
 
           {/* Guest Count & Budget Row */}

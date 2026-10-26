@@ -6,6 +6,7 @@ import {
   ASSIST_TASK_REGISTRY,
   ASSIST_SYSTEM_PROMPT,
   withTimelineCeiling,
+  withVenueCandidateIds,
 } from "@/lib/ai/assist/tasks";
 import { checkRateLimit, getClientKey } from "@/lib/security/rateLimit";
 import {
@@ -19,7 +20,8 @@ import { formatZodErrors } from "@/lib/validation/schemas";
  *
  * POST /api/ai/assist
  * Body: { task: 'budget-plan' | 'timeline-plan' | 'vendor-plan' |
- *              'vendor-inquiry' | 'plan-review' | 'assistant-chat',
+ *              'vendor-inquiry' | 'venue-recommend' | 'plan-review' |
+ *              'assistant-chat',
  *         payload: {...} }
  *
  * One hardened pipeline serves every AI capability in the app:
@@ -118,6 +120,12 @@ export function createAssistPostHandler(runEngine: RunEngine) {
           let parsedJson = extractAndParseJSON(content);
           if (task === "timeline-plan") {
             parsedJson = withTimelineCeiling(parsedJson, payload.eventDate);
+          }
+          if (task === "venue-recommend") {
+            parsedJson = withVenueCandidateIds(
+              parsedJson,
+              payload.candidates.map((c) => c.id)
+            );
           }
           const data = registry.normalize(parsedJson);
           if (!data) {

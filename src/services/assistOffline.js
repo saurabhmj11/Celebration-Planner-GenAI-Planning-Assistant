@@ -423,7 +423,65 @@ export function offlinePlanReview({
 }
 
 /* ------------------------------------------------------------------ */
-/* 6. Assistant chat                                                  */
+/* 6b. Venue recommendation (offline tier)                            */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Smart Offline venue scout — deterministic rationale for the algorithm-ranked
+ * shortlist so the Venue Finder never shows a dead AI panel.
+ */
+export function offlineVenueRecommend({
+  eventType = 'other',
+  eventTitle = '',
+  guestCount = 0,
+  venueBudget = 0,
+  preferences = [],
+  candidates = [],
+} = {}) {
+  if (!candidates.length) {
+    return {
+      summary: 'No shortlist was available to analyze — adjust your preferences and try again.',
+      venues: [],
+      tips: [
+        'Ask each venue for an itemized all-in quote including service fees and overtime.',
+        'Book 9-12 months ahead for peak season dates; 3-4 months is usually enough off-season.',
+        'Get the rain plan and cancellation policy in writing before paying a deposit.',
+      ],
+    };
+  }
+
+  const label = EVENT_LABELS[eventType] || EVENT_LABELS.other;
+  const prefs = preferences.length ? preferences.join(', ') : 'any style';
+
+  const venues = candidates.map((c) => {
+    const capNote = guestCount > (c.capacityMax || 0)
+      ? `note it caps out at ${c.capacityMax} guests`
+      : `it comfortably hosts your ${guestCount} guests`;
+    const budgetNote = venueBudget > 0 && (c.estCost || 0) > venueBudget
+      ? `the $${Math.round(c.estCost)} estimate runs ${Math.round((((c.estCost || 0) / venueBudget) - 1) * 100)}% over the venue slice, so negotiate the package or guest minimum`
+      : `the $${Math.round(c.estCost)} estimate sits inside your venue budget`;
+    return {
+      id: c.id,
+      whyItFits: `A ${c.type} venue tagged ${c.tags.slice(0, 4).join('/')} — a solid ${label} choice where ${capNote}, and ${budgetNote}.`,
+      negotiationTip: `For a ${c.type} space, ask them to waive the site fee or bundle chairs/tables when you commit to ${Math.max(20, Math.round((guestCount || 40) * 0.9))}+ guests on a Friday or Sunday.`,
+      costSuggestion: 'Base fee + per-guest rate + ~10% service charge is typical; confirm what is included.',
+    };
+  });
+
+  const top = candidates[0];
+  return {
+    summary: `For ${eventTitle || `your ${label}`}, ${top?.name || 'the top match'} leads the shortlist for ${guestCount} guests with ${prefs} in mind — compare it with the cheaper alternates before committing.`,
+    venues,
+    tips: [
+      'Ask each venue for an itemized all-in quote including service fees, overtime, and cleanup.',
+      'Peak-season Saturdays book 9-12 months out; a Friday/Sunday can cut the site fee 15-25%.',
+      'Get the rain plan, curfew, and cancellation policy in writing before paying a deposit.',
+    ],
+  };
+}
+
+/* ------------------------------------------------------------------ */
+/* 7. Assistant chat (offline tier)                                   */
 /* ------------------------------------------------------------------ */
 
 /**

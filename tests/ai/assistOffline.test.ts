@@ -12,6 +12,7 @@ import {
   offlineBudgetPlan,
   offlinePlanReview,
   offlineTimelinePlan,
+  offlineVenueRecommend,
   offlineVendorInquiry,
   offlineVendorPlan,
 } from "../../src/services/assistOffline";
@@ -231,5 +232,68 @@ describe("offlineAssistantChat", () => {
     const res = offlineAssistantChat({ ...ctx, message: "what is the capital of France?" });
     expect(res.reply).toContain("budget");
     expect(res.suggestions.length).toBeGreaterThan(0);
+  });
+});
+
+describe("offlineVenueRecommend", () => {
+  const candidates = [
+    {
+      id: "emerald-bay-resort",
+      name: "Emerald Bay Waterfront Resort",
+      type: "resort",
+      tags: ["resort", "lakeside", "luxury", "pool"],
+      capacityMax: 350,
+      rating: 4.8,
+      score: 92,
+      estCost: 14300,
+    },
+    {
+      id: "riverside-pavilion",
+      name: "Riverside Community Pavilion",
+      type: "convention",
+      tags: ["budget", "community", "pavilion"],
+      capacityMax: 250,
+      rating: 4.4,
+      score: 61,
+      estCost: 3100,
+    },
+  ];
+
+  test("builds rationale for every candidate with capacity + budget notes", () => {
+    const res = offlineVenueRecommend({
+      eventType: "anniversary",
+      eventTitle: "Silver Lakeside Anniversary",
+      guestCount: 100,
+      venueBudget: 15000,
+      preferences: ["lakeside", "resort"],
+      candidates,
+    });
+
+    expect(res.venues.length).toBe(2);
+    const emerald = res.venues.find((v) => v.id === "emerald-bay-resort");
+    expect(emerald?.whyItFits).toContain("100 guests");
+    expect(emerald?.whyItFits).toContain("inside your venue budget");
+    expect(emerald?.negotiationTip).toContain("resort");
+    const riverside = res.venues.find((v) => v.id === "riverside-pavilion");
+    expect(riverside?.whyItFits).toContain("3100");
+    expect(res.summary).toContain("Emerald Bay");
+    expect(res.tips.length).toBe(3);
+  });
+
+  test("flags over-budget estimates in the rationale", () => {
+    const res = offlineVenueRecommend({
+      eventType: "wedding",
+      guestCount: 200,
+      venueBudget: 8000,
+      candidates: [candidates[0]],
+    });
+    expect(res.venues[0].whyItFits).toContain("over the venue slice");
+  });
+
+  test("empty shortlist degrades gracefully with booking tips", () => {
+    const res = offlineVenueRecommend({ candidates: [] });
+    expect(res.venues.length).toBe(0);
+    expect(res.summary).toContain("adjust your preferences");
+    expect(res.tips.length).toBe(3);
   });
 });
