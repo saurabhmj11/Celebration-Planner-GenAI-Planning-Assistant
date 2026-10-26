@@ -4,6 +4,7 @@ import { useEventContext } from '../../context/EventContext';
 import { CountdownBanner } from './CountdownBanner';
 import { StatCards } from './StatCards';
 import { QuickActionGrid } from './QuickActionGrid';
+import { PlanReview } from '../ai/PlanReview';
 import { BUDGET_CATEGORIES, EVENT_TYPES } from '../../data/defaultData';
 import {
   calculateBudgetTotals,
@@ -102,6 +103,9 @@ const DashboardOverviewComponent = ({
         onOpenPrint={() => onNavigate('print')}
         onEditEvent={onEditEvent}
       />
+
+      {/* 3.5 AI Plan Review — readiness audit */}
+      <PlanReview />
 
       {/* 4. Split Row: Budget Snapshot & Upcoming Milestone Tasks */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { useEventContext } from '../../context/EventContext';
 import { TIMELINE_PHASES, BUDGET_CATEGORIES } from '../../data/defaultData';
 import { calculateTimelineStats, getDueDateUrgency } from '../../utils/calculator';
+import { TimelineAI } from '../ai/TimelineAI';
 import {
   Clock,
   Plus,
@@ -61,6 +62,9 @@ export const TimelineView = ({ onOpenTaskModal, onEditTask }) => {
 
   return (
     <div className="space-y-8 animate-fadeIn">
+      {/* AI Milestone Planner */}
+      <TimelineAI />
+
       {/* Top Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>

@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { useEventContext } from '../../context/EventContext';
 import { VENDOR_CATEGORIES, VENDOR_STATUSES } from '../../data/defaultData';
 import { calculateVendorStats } from '../../utils/calculator';
+import { VendorAI } from '../ai/VendorAI';
 import {
   Users,
   Plus,
@@ -53,6 +54,9 @@ export const VendorChecklist = ({ onOpenVendorModal, onEditVendor }) => {
 
   return (
     <div className="space-y-8 animate-fadeIn">
+      {/* AI Vendor Advisor */}
+      <VendorAI />
+
       {/* Top Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>

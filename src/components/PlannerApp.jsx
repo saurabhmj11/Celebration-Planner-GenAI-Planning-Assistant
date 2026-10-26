@@ -16,6 +16,7 @@ import { BudgetPlanner } from '@/components/budget/BudgetPlanner';
 import { TimelineView } from '@/components/timeline/TimelineView';
 import { VendorChecklist } from '@/components/vendors/VendorChecklist';
 import { ThemeIdeaStudio } from '@/components/ai/ThemeIdeaStudio';
+import { AssistantChat } from '@/components/ai/AssistantChat';
 import { Heart } from 'lucide-react';
 
 // The print summary is a heavy, rarely-visited surface — load it lazily.
@@ -223,6 +224,9 @@ const MainAppContent = () => {
         isOpen={isApiKeyModalOpen}
         onClose={() => setIsApiKeyModalOpen(false)}
       />
+
+      {/* Floating context-aware AI assistant (all tabs) */}
+      <AssistantChat />
 
       {/* Toast Notification Container */}
       <NotificationToast />

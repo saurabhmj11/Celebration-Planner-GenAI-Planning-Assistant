@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { useEventContext } from '../../context/EventContext';
 import { BUDGET_CATEGORIES } from '../../data/defaultData';
 import { calculateBudgetTotals, calculateCategoryBreakdown } from '../../utils/calculator';
+import { BudgetCopilot } from '../ai/BudgetCopilot';
 import {
   Wallet,
   Plus,
@@ -134,6 +135,9 @@ export const BudgetPlanner = ({ onOpenExpenseModal, onEditExpense }) => {
           </p>
         </div>
       </div>
+
+      {/* AI Budget Copilot — allocation plan + savings tips */}
+      <BudgetCopilot />
 
       {/* Over-budget or Warning Alert */}
       {isOverBudget && (

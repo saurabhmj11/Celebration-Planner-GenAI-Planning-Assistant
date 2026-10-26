@@ -10,7 +10,7 @@ Planning a celebration is fragmented: budgets live in spreadsheets, vendors in c
 
 | Problem Requirement | Delivered |
 |---|---|
-| GenAI-powered planning assistant | `/api/ai/themes` server route (z-ai-web-dev-sdk / GLM) generates personalized theme concepts, palettes, decor, music, catering & budget tips |
+| GenAI-powered planning assistant | Six live GenAI capabilities across every module via `/api/ai/themes` + `/api/ai/assist` (z-ai-web-dev-sdk / GLM): AI Theme Studio, Budget Copilot, Milestone Planner, Vendor Advisor & inquiry drafts, Plan Review, and the floating Planning Assistant chat |
 | Weddings · Birthdays · Community events | Type-aware presets, per-type hero gradients, tailored sample blueprints for each of the three event categories |
 | Budgets | Smart budget planner with 8 expense categories, allocated-vs-spent math, live over-budget warnings, per-guest cost analytics |
 | Timelines | Phased milestone timeline (3+ months → day-of → wrap-up) with urgency badges and completion tracking |
@@ -43,15 +43,22 @@ Planning a celebration is fragmented: budgets live in spreadsheets, vendors in c
 - One-click **Apply to Event** writes the theme palette and injects 4 decor milestones into the timeline.
 - **Triple-tier resilience**: built-in server GLM engine → optional user-supplied Gemini key → instant curated offline engine. The app never fails closed.
 
+### 6. AI Everywhere — five more GenAI copilots
+- **AI Budget Copilot** (Budget tab): a personalized allocation plan with % bars, dollar amounts and saving tips — applicable as real budget lines in one click.
+- **AI Milestone Planner** (Timeline tab): drafts a full task plan sized to the real runway (dates clamped to the event date), previewed with per-task checkboxes before anything is saved.
+- **AI Vendor Advisor** (Vendors tab): vendor-gap analysis with realistic cost ranges, the six must-ask questions, one-click "add as vendor rows", and AI-drafted outreach emails per vendor with copy-to-clipboard.
+- **AI Plan Review** (Dashboard): a 0–100 readiness audit — strengths, risks, and prioritized next actions computed from the real budget, task and vendor data.
+- **AI Planning Assistant** (floating, every tab): a context-aware chat that knows the active event's budget, runway, tasks and vendors, with suggested follow-ups and multi-turn memory.
+
 ---
 
 ## 🤖 GenAI Services Utilized (and where)
 
 | Service | Where it is used |
 |---|---|
-| **z-ai-web-dev-sdk (GLM, server-side only)** | `src/app/api/ai/themes/route.ts` — the built-in GenAI engine powering the AI Theme Studio: strict-JSON theme generation, per-event personalization (type, guest count, budget, vibe), single-retry on malformed output |
+| **z-ai-web-dev-sdk (GLM, server-side only)** | `src/app/api/ai/themes/route.ts` — AI Theme Studio (strict-JSON theme concepts, per-event personalization, single-retry on malformed output) · `src/app/api/ai/assist/route.ts` — the unified assist engine powering **six more capabilities**: `budget-plan`, `timeline-plan`, `vendor-plan`, `vendor-inquiry`, `plan-review`, `assistant-chat` |
 | **Google Gemini API (optional, BYO key)** | `src/services/geminiService.js` — users can plug their own Gemini key in AI Settings; the app calls it directly from the server layer |
-| **Smart Offline Recommendation Engine** | Curated theme catalog adapted to event context when live generation is unavailable — zero-downtime fallback |
+| **Smart Offline Planning Engines** | `src/services/assistOffline.js` + curated theme catalog — parameter-driven fallbacks for every AI surface when live generation is unavailable, so no AI panel ever fails closed |
 
 The AI service is **never called from the client**; all GenAI traffic flows through validated server routes.
 
@@ -62,10 +69,10 @@ The AI service is **never called from the client**; all GenAI traffic flows thro
 ```
 Next.js 16 (App Router) · TypeScript 5 · Tailwind CSS 4 · shadcn/ui patterns
 React 19 · Lucide icons · canvas-confetti · localStorage persistence
-Server route: /api/ai/themes → z-ai-web-dev-sdk (GLM)
+Server routes: /api/ai/themes + /api/ai/assist → z-ai-web-dev-sdk (GLM)
 ```
 
-- **`src/lib/ai/`** — `jsonExtractor.ts` (fence-stripping + balanced-brace LLM output parser), `themeNormalizer.ts` (strict normalization of untrusted AI output), `engine.ts` (injectable LLM seam).
+- **`src/lib/ai/`** — `jsonExtractor.ts` (fence-stripping + balanced-brace LLM output parser), `themeNormalizer.ts` (strict normalization of untrusted AI output), `assist/tasks.ts` (prompt builders + normalizers for the six assist capabilities), `engine.ts` (injectable LLM seam).
 - **`src/lib/security/`** — `rateLimit.ts` (in-memory sliding-window limiter), `sanitize.ts` (control-char stripping, length caps, date validation).
 - **`src/lib/validation/`** — Zod schemas for every request body.
 - **`src/utils/calculator.js`** — pure, fully-tested budget/timeline/vendor math.
@@ -95,10 +102,10 @@ Server route: /api/ai/themes → z-ai-web-dev-sdk (GLM)
 - **Lazy-loaded** heavy print/summary surface via `next/dynamic` with a loading state.
 - Optimistic local-first persistence (localStorage) — instant UI, zero network on the critical path.
 
-## 🧪 Testing — 104 tests, all passing
+## 🧪 Testing — 147 tests, all passing
 
 ```bash
-bun test        # 104 unit + integration tests across 10 suites
+bun test        # 147 unit + integration tests across 13 suites
 bun run lint    # ESLint (Next.js + TypeScript rules)
 ```
 
@@ -110,6 +117,8 @@ Coverage includes:
 | `tests/timeline.test.ts` | Progress stats, urgency bands with deterministic reference dates, calendar-overflow rejection |
 | `tests/vendor.test.ts` | Booked counting (booked + deposit_paid), cost aggregation, negative-value immunity |
 | `tests/api/themes-route.test.ts` | **Full AI route pipeline** via an injected fake engine: happy path, retry-on-malformed, upstream failure, 400/413/429, per-client rate limits, stack-trace leak prevention |
+| `tests/api/assist-route.test.ts` | **All six assist tasks** through the full pipeline: per-task happy paths, normalization (percent rescale, date clamping, score clamping), 400/405/413/429, retry-on-garbage, stack-leak prevention |
+| `tests/ai/assistOffline.test.ts` | Smart Offline Engines: allocation sums, date-window safety, category-overlap exclusion, coordinator fallback, score bounds, chat intent routing |
 | `tests/ai/*` | LLM JSON extraction (fences, prose, escapes), theme normalization (hex repair, control-char stripping, list caps) |
 | `tests/security/*` | Rate limiter (allow/block/reset/per-client), sanitization helpers |
 | `tests/storageService.test.ts` | Persistence resilience + hostile-import rejection |

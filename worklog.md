@@ -91,3 +91,26 @@ Stage Summary:
 - Fixed: nav no longer overlaps the event selector at any viewport; full event titles display; every nav control is clickable; dropdown and drawer are fully keyboard-operable (WCAG listbox pattern); uniform button heights across the bar.
 - Key file: src/components/common/Navbar.jsx (full two-tier restructure) + scroll-mt tweak in src/components/PlannerApp.jsx.
 - Verification artifacts: scripts/nav-fixed-{1024,1280,1440,mobile-390,mobile-drawer,marcus-1440,final-mobile}.png, scripts/vlm-nav-fixed.json.
+
+---
+Task ID: 4
+Agent: Main agent (Z.ai)
+Task: Make GenAI assist in EVERY module — user feedback: "there is no use of gen ai in it... add more ai stuff in every it must help in everything" (AI previously lived only in the Theme Studio).
+
+Work Log:
+- Designed + built a unified hardened GenAI backend for SIX AI capabilities:
+  - `src/lib/validation/assistSchemas.ts` — one Zod discriminated union over all tasks (budget-plan, timeline-plan, vendor-plan, vendor-inquiry, plan-review, assistant-chat) with strict bounds on every field.
+  - `src/lib/ai/assist/tasks.ts` — pure per-task prompt builders (sanitizing) + normalizers (percent rescale to 100, timeline dates clamped to the event date, score 0-100, string caps, list caps).
+  - `src/app/api/ai/assist/route.ts` — thin factory orchestrator (method allowlist, 12/min rate limit + Retry-After, 50KB cap, retry-once on malformed JSON, no stack leaks) mirroring the themes route pattern.
+- Client services: `src/services/assistOffline.js` — Smart Offline Planning Engines (budget templates per event type, runway-compressed timeline templates with prefix-fuzzy vendor-category overlap matching, rule-based plan-review scoring, intent-routed chat responder) and `src/services/aiAssist.js` — live-first fetch with 45s timeout that silently falls back to the offline tier.
+- UI (new components): `aiKit.jsx` (shared AI card/button/source-note/skeleton/useAiRequest + category mapper + phase deriver), `BudgetCopilot.jsx`, `TimelineAI.jsx`, `VendorAI.jsx`, `PlanReview.jsx`, `AssistantChat.jsx` (floating context-aware chat, aria-live transcript, suggestion chips, multi-turn history, Escape close).
+- Integrations: BudgetCopilot into BudgetPlanner, TimelineAI into TimelineView, VendorAI into VendorChecklist, PlanReview into DashboardOverview, AssistantChat globally into PlannerApp; AI Settings modal copy now lists all six AI capabilities; skip-link offsets unaffected.
+- Chat payload enriched with task/vendor stats, unbooked categories and upcoming tasks so BOTH the live model and the offline responder answer with real plan facts; deduped unbooked lists.
+- Tests: +33 tests (147 total, 13 suites, all passing): `tests/api/assist-route.test.ts` (per-task happy paths through the full pipeline, normalization clamps, 400/405/413/429, retry, stack-leak) + `tests/ai/assistOffline.test.ts` (allocation sums, date-window safety, overlap exclusion, coordinator fallback, score bounds, intent routing).
+- Browser E2E (live GLM engine): Plan Review returned score 45 with real strengths/risks/actions; Budget Copilot generated a LIVE allocation plan and "Add as budget lines" wrote expenses (totals updated + toast); Milestone Planner generated 10 tasks and added all 10 (3/15 completed badge); Vendor Advisor LIVE gap analysis (6 questions) + "Add all" (2/6 -> 2/9 vendors) + AI inquiry draft personalized to "Marcus's 30th Neon Synthwave Rooftop Party"; floating Assistant answered with live event facts ("$240 under budget with 49 days to go", glm-4-plus badge) + 3 follow-up suggestions; route-blocked offline fallback verified (instant, correct vendor facts, "offline engine" badge); mobile 390px chat panel fits and Escape closes; no page/console errors; lint clean.
+
+Stage Summary:
+- Deliverable: AI assists in EVERY module — six GenAI capabilities (Theme Studio + Budget Copilot + Milestone Planner + Vendor Advisor & inquiry drafts + Plan Review + floating Planning Assistant), each with live GLM generation, hardened unified backend, instant Smart Offline fallback, and one-click application back into the real plan (expenses, tasks, vendor rows).
+- Key new files: src/lib/validation/assistSchemas.ts, src/lib/ai/assist/tasks.ts, src/app/api/ai/assist/route.ts, src/services/{aiAssist.js,assistOffline.js}, src/components/ai/{aiKit,BudgetCopilot,TimelineAI,VendorAI,PlanReview,AssistantChat}.jsx, tests/api/assist-route.test.ts, tests/ai/assistOffline.test.ts.
+- README GenAI section updated (services table, features, architecture, 147-test matrix); AI Settings modal lists all capabilities.
+- Verification artifacts: scripts/ai-*.png (17 screenshots) + scripts/vlm-final-ai.json.
