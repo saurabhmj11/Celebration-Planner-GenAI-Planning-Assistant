@@ -9,6 +9,8 @@
  * UI components never care which tier answered.
  */
 
+import { autoArrangeTables } from '../lib/planning/seating.js';
+
 const money = (n) => `$${Math.round(n).toLocaleString('en-US')}`;
 
 const todayStr = () => new Date().toISOString().slice(0, 10);
@@ -629,5 +631,201 @@ export function offlineAssistantChat({
   return {
     reply,
     suggestions: ['How is my budget looking?', 'What should I do next?', 'Which vendors am I missing?'],
+  };
+}
+
+/* ------------------------------------------------------------------ */
+/* 9. Agent Force offline engines                                     */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Offline Seating Strategist — delegates to the same deterministic
+ * arranger (src/lib/planning/seating.js) that powers the "Auto-Arrange"
+ * button, so the fallback tier and the manual button always agree.
+ * @returns {{ summary: string, assignments: {tableId:string,guestIds:string[]}[], notes: string[] }}
+ */
+export function offlineSeatingPlan({ eventType = 'other', tables = [], guests = [] } = {}) {
+  const { tables: arranged, unseatedIds, groupsKeptTogether } = autoArrangeTables(tables, guests);
+
+  const assignments = arranged
+    .filter((t) => t.seats.length > 0)
+    .map((t) => ({ tableId: t.id, guestIds: t.seats }));
+
+  const label = EVENT_LABELS[eventType] || EVENT_LABELS.other;
+  const notes = [
+    `Circles stayed together at ${groupsKeptTogether} table${groupsKeptTogether === 1 ? '' : 's'} — families and friend groups are never split unless a table couldn't fit the whole party.`,
+  ];
+  if (unseatedIds.length > 0) {
+    notes.push(`${unseatedIds.length} attending guest${unseatedIds.length === 1 ? '' : 's'} could not be seated — add a table or two, then re-run the agent.`);
+  }
+
+  return {
+    summary: `Seated ${guests.filter((g) => g.rsvp === 'attending').length - unseatedIds.length} of ${guests.filter((g) => g.rsvp === 'attending').length} confirmed guests across ${assignments.length} tables using ${label} seating heuristics.`,
+    assignments,
+    notes,
+  };
+}
+
+/**
+ * Offline Payment Controller — classic deposit/balance structuring:
+ * each booked vendor becomes a 30% deposit (due ~now) + 70% balance
+ * (due 14 days before the event, clamped into [today, eventDate]).
+ * @returns {{ summary: string, payments: {label:string,vendorName?:string,amount:number,kind:string,dueDate:string,notes?:string}[] }}
+ */
+export function offlinePaymentSchedule({
+  eventType = 'other',
+  eventDate = '',
+  totalBudget = 0,
+  vendors = [],
+} = {}) {
+  const label = EVENT_LABELS[eventType] || EVENT_LABELS.other;
+  const booked = vendors.filter((v) => v && (v.status === 'booked' || v.status === 'deposit_paid'));
+  const balanceDate = dateMinusDays(eventDate, 14);
+  const payments = [];
+
+  if (booked.length === 0) {
+    // No vendors yet: structure the budget itself into phases.
+    const chunks = [
+      ['Venue & production deposit', 0.35, 0],
+      ['Catering & bar deposit', 0.25, 21],
+      ['Entertainment & decor deposit', 0.15, 42],
+      ['Final balance & gratuity', 0.25, 14],
+    ];
+    for (const [name, share, daysBefore] of chunks) {
+      payments.push({
+        label: `${name} — ${Math.round(share * 100)}% of budget`,
+        amount: Math.round(totalBudget * share),
+        kind: name.includes('Final') ? 'final' : 'deposit',
+        dueDate: dateMinusDays(eventDate, daysBefore),
+        notes: `Held from the ${money(totalBudget)} budget while vendor contracts are finalized.`,
+      });
+    }
+  } else {
+    for (const v of booked) {
+      const name = String(v.name || 'Vendor').slice(0, 80);
+      const cost = Math.max(0, Number(v.cost) || 0);
+      if (cost <= 0) continue;
+      const deposit = Math.round(cost * 0.3);
+      payments.push({
+        label: `${name} — booking deposit (30%)`,
+        vendorName: name,
+        amount: deposit,
+        kind: 'deposit',
+        dueDate: todayStr(),
+        notes: 'Deposits lock the date; standard is 25-50% of contract value.',
+      });
+      payments.push({
+        label: `${name} — final balance (70%)`,
+        vendorName: name,
+        amount: cost - deposit,
+        kind: 'balance',
+        dueDate: balanceDate,
+        notes: 'Due 14 days out, before final headcount is due to catering.',
+      });
+    }
+  }
+
+  if (payments.length === 0) {
+    payments.push({
+      label: 'Opening retainer for first contract',
+      amount: Math.max(0, Math.round(totalBudget * 0.3)),
+      kind: 'deposit',
+      dueDate: todayStr(),
+      notes: 'Add booked vendors so the schedule can split their contracts accurately.',
+    });
+  }
+
+  payments.sort((a, b) => a.dueDate.localeCompare(b.dueDate));
+  const total = payments.reduce((s, p) => s + p.amount, 0);
+
+  return {
+    summary: `${payments.length} milestones totalling ${money(total)} for the ${label}, structured as 30% deposits now with balances due 14 days before the event.`,
+    payments,
+  };
+}
+
+/** Add (or subtract) minutes on an HH:MM string; wraps across midnight. */
+function addMinutes(hhmm, minutes) {
+  const [h, m] = hhmm.split(':').map(Number);
+  let total = h * 60 + m + Math.round(minutes);
+  const days = Math.floor(total / 1440);
+  total = ((total % 1440) + 1440) % 1440;
+  const hh = String(Math.floor(total / 60)).padStart(2, '0');
+  const mm = String(total % 60).padStart(2, '0');
+  return { time: `${hh}:${mm}`, nextDay: days > 0 };
+}
+
+/**
+ * Offline Day-Of Producer — a type-aware production template anchored to
+ * the event's start time: setup crew first, guests ~on time, headline
+ * blocks, catering, close, teardown.
+ * @returns {{ summary: string, items: {time:string,durationMin:number,activity:string,owner:string,notes?:string}[] }}
+ */
+export function offlineRunSheet({
+  eventType = 'other',
+  eventTitle = 'Your celebration',
+  eventTime = '17:00',
+  vendors = [],
+  highlights = [],
+} = {}) {
+  const label = EVENT_LABELS[eventType] || EVENT_LABELS.other;
+  const hasCatering = vendors.some((v) => String(v).toLowerCase().includes('cater') || String(v).toLowerCase().includes('table'));
+  const hasMusic = vendors.some((v) => String(v).toLowerCase().includes('dj') || String(v).toLowerCase().includes('sound') || String(v).toLowerCase().includes('string') || String(v).toLowerCase().includes('band'));
+  const hasPhoto = vendors.some((v) => String(v).toLowerCase().includes('photo') || String(v).toLowerCase().includes('video') || String(v).toLowerCase().includes('lumiere'));
+
+  const headliner = (eventType === 'wedding' && 'Ceremony & vows')
+    || (eventType === 'birthday' && 'Cake cutting & toast')
+    || (eventType === 'community' && 'Official opening & ribbon')
+    || 'Welcome toast';
+
+  const items = [];
+  const push = (offsetMin, durationMin, activity, owner, notes) => {
+    const { time, nextDay } = addMinutes(eventTime, offsetMin);
+    items.push({
+      time,
+      durationMin,
+      activity: `${activity}${nextDay ? ' (past midnight)' : ''}`,
+      owner,
+      ...(notes ? { notes } : {}),
+    });
+  };
+
+  // Setup arc: 3h -> 2h -> 1h before doors.
+  push(-180, 60, 'Vendor load-in: venue access opens', 'Venue Team', 'Vendors arrive in reverse order of setup complexity.');
+  push(-120, 60, 'Decor, florals & furniture placement', 'Decor Team', hasPhoto ? 'Photographer captures styled details before guests arrive.' : undefined);
+  push(-60, 45, 'Sound check, lighting & final walkthrough', hasMusic ? 'Music & Production' : 'Host', 'Test every mic, playlist cue and lighting scene.');
+  push(-20, 20, 'Host & team ready positions', 'Host', 'Water, emergency kit, run-sheet copies to every owner.');
+
+  // Guest arc.
+  push(0, 30, 'Doors open — welcome flow', 'Host & Venue Team', 'Greeters at entry; music at ambience level.');
+  push(30, 30, 'Arrival drinks & mingling', 'Catering', hasCatering ? 'Passed drinks and light bites per contract.' : undefined);
+  push(60, 45, headliner, 'Host', 'The headline moment — cue music down, everyone seated/gathered.');
+  push(105, 75, 'Dining service', 'Catering', 'Clear dietary flags with the kitchen before service starts.');
+
+  const extra = [];
+  if (eventType === 'wedding') {
+    extra.push(['Toasts & speeches', 'Host & Wedding Party', 'Best man, maid of honour, family — 3 minutes each.']);
+    extra.push(['First dance & open floor', hasMusic ? 'Music & Production' : 'Host', 'Dim lights, open dance floor.']);
+  } else if (eventType === 'birthday') {
+    extra.push(['Games & activity block', 'Host', highlights[0] || 'Run the party game or tournament bracket.']);
+    extra.push(['Open dance & social hour', hasMusic ? 'Music & Production' : 'Host', 'DJ takes requests.']);
+  } else {
+    extra.push(['Program & community talks', 'Host', 'Keep speeches under 5 minutes each.']);
+    extra.push(['Open activities & booths', 'Volunteers', 'Rotate volunteers every 45 minutes.']);
+  }
+  let cursor = 180;
+  for (const [activity, owner, notes] of extra) {
+    push(cursor, 45, activity, owner, notes);
+    cursor += 45;
+  }
+
+  push(cursor, 20, 'Cake / dessert & closing toast', 'Catering', 'Final group photo before guests disperse.');
+  push(cursor + 20, 45, 'Farewell & guest send-off', 'Host', 'Favors at the door; safe-ride reminders.');
+  push(cursor + 65, 60, 'Teardown & vendor load-out', 'Venue Team', 'Walk the space against the venue checklist; collect all deposits.');
+
+  items.sort((a, b) => a.time.localeCompare(b.time));
+  return {
+    summary: `A ${label} production plan for "${eventTitle}" anchored to the ${eventTime} start — ${items.length} cue lines from load-in to load-out.`,
+    items,
   };
 }

@@ -18,6 +18,8 @@ import { VendorChecklist } from '@/components/vendors/VendorChecklist';
 import { VenueFinder } from '@/components/venues/VenueFinder';
 import { GuestManager } from '@/components/guests/GuestManager';
 import { PhotoWall } from '@/components/photos/PhotoWall';
+import { DayOfWorkbench } from '@/components/dayof/DayOfWorkbench';
+import { AgentForcePanel } from '@/components/force/AgentForcePanel';
 import { ThemeIdeaStudio } from '@/components/ai/ThemeIdeaStudio';
 import { AssistantChat } from '@/components/ai/AssistantChat';
 import { Heart } from 'lucide-react';
@@ -159,6 +161,10 @@ const MainAppContent = () => {
         {currentTab === 'guests' && <GuestManager />}
 
         {currentTab === 'photos' && <PhotoWall />}
+
+        {currentTab === 'dayof' && <DayOfWorkbench onNavigate={setCurrentTab} />}
+
+        {currentTab === 'force' && <AgentForcePanel onNavigate={setCurrentTab} />}
 
         {currentTab === 'vendors' && (
           <VendorChecklist

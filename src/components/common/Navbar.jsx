@@ -21,6 +21,8 @@ import {
   Pencil,
   Menu,
   X,
+  Bot,
+  CalendarClock,
 } from 'lucide-react';
 import { formatShortDate, formatCurrency } from '../../utils/formatters';
 import { useCelebrationMood } from '../../hooks/useCelebrationMood';
@@ -64,9 +66,11 @@ export const Navbar = ({ currentTab, setCurrentTab, onOpenNewEvent, onOpenApiKey
 
   const navItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { id: 'force', label: 'Agents', icon: Bot, ariaLabel: 'Agent Force — your AI planning workforce', highlight: true },
     { id: 'budget', label: 'Budget', icon: Wallet, ariaLabel: 'Budget Planner' },
     { id: 'timeline', label: 'Timeline', icon: Clock, ariaLabel: 'Timeline & Tasks' },
     { id: 'guests', label: 'Guests', icon: UsersRound, ariaLabel: 'Guests & RSVPs — invitations, replies and headcount', highlight: true },
+    { id: 'dayof', label: 'Day-Of', icon: CalendarClock, ariaLabel: 'Day-Of Workbench — run sheet, seating chart, payment ledger', highlight: true },
     { id: 'photos', label: 'Photos', icon: Images, ariaLabel: 'Photo Memory Wall — share celebration moments' },
     { id: 'venues', label: 'Venues', icon: MapPinned, ariaLabel: 'AI Venue Finder', highlight: true },
     { id: 'vendors', label: 'Vendors', icon: Users, ariaLabel: 'Vendor Checklist' },

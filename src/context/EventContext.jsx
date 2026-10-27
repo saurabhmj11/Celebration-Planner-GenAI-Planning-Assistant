@@ -4,6 +4,7 @@ import { storageService } from '../services/storageService';
 import { INITIAL_EVENTS } from '../data/defaultData';
 import { makeId, sanitizeEvents } from '../utils/ids';
 import { MAX_PHOTOS_PER_EVENT, validatePhotoDataUrl } from '../lib/photos/photoModel';
+import { seatWeight } from '../lib/planning/seating';
 
 const EventContext = createContext(null);
 
@@ -96,6 +97,10 @@ export const EventProvider = ({ children }) => {
       guests: eventData.guests || [],
       invitation: eventData.invitation || null,
       photos: eventData.photos || [],
+      seating: { tables: eventData.seating?.tables || [] },
+      payments: eventData.payments || [],
+      runSheet: eventData.runSheet || [],
+      agentRuns: [],
       budget: Number(eventData.budget) || 5000,
       guestCount: Number(eventData.guestCount) || 50,
     };
@@ -141,6 +146,8 @@ export const EventProvider = ({ children }) => {
     if (!source) return;
 
     const dupId = makeId('event');
+    // Guest ids are re-minted below, so seat assignments must follow the map.
+    const guestIdMap = new Map((source.guests || []).map((g) => [g.id, makeId('guest')]));
     const duplicated = {
       ...source,
       id: dupId,
@@ -149,9 +156,19 @@ export const EventProvider = ({ children }) => {
       expenses: source.expenses ? source.expenses.map((exp) => ({ ...exp, id: makeId('exp') })) : [],
       tasks: source.tasks ? source.tasks.map((t) => ({ ...t, id: makeId('task'), completed: false })) : [],
       vendors: source.vendors ? source.vendors.map((v) => ({ ...v, id: makeId('v') })) : [],
-      guests: (source.guests || []).map((g) => ({ ...g, id: makeId('guest') })),
+      guests: (source.guests || []).map((g) => ({ ...g, id: guestIdMap.get(g.id) || makeId('guest') })),
       invitation: source.invitation ? { ...source.invitation } : null,
       photos: (source.photos || []).map((p) => ({ ...p, id: makeId('photo') })),
+      seating: {
+        tables: (source.seating?.tables || []).map((t) => ({
+          ...t,
+          id: makeId('table'),
+          seats: (t.seats || []).map((id) => guestIdMap.get(id)).filter(Boolean),
+        })),
+      },
+      payments: (source.payments || []).map((p) => ({ ...p, id: makeId('pay') })),
+      runSheet: (source.runSheet || []).map((r) => ({ ...r, id: makeId('run') })),
+      agentRuns: [],
     };
 
     setEvents((prev) => [duplicated, ...prev]);
@@ -691,6 +708,350 @@ export const EventProvider = ({ children }) => {
     showToast('Photo removed from the wall.', 'info');
   }, [activeEvent, showToast]);
 
+  // ---------------- SEATING CHART ACTIONS ----------------
+
+  /** Mutate the active event's seating tables in one state update. */
+  const mutateTables = useCallback((mapFn) => {
+    if (!activeEvent) return null;
+    let result = null;
+    setEvents((prev) =>
+      prev.map((e) => {
+        if (e.id !== activeEvent.id) return e;
+        const nextTables = mapFn(e.seating?.tables || []);
+        result = nextTables;
+        return { ...e, seating: { tables: nextTables } };
+      })
+    );
+    return result;
+  }, [activeEvent]);
+
+  const addTable = useCallback((data) => {
+    if (!activeEvent) return;
+    const table = {
+      id: makeId('table'),
+      name: String(data?.name || 'New Table').trim().slice(0, 60) || 'New Table',
+      capacity: Math.max(1, Math.min(50, Math.round(Number(data?.capacity) || 8))),
+      seats: [],
+    };
+    mutateTables((tables) => [...tables, table]);
+    showToast(`Added "${table.name}" (${table.capacity} seats).`, 'success');
+  }, [activeEvent, mutateTables, showToast]);
+
+  const updateTable = useCallback((tableId, fields) => {
+    if (!activeEvent) return;
+    mutateTables((tables) =>
+      tables.map((t) =>
+        t.id === tableId
+          ? {
+              ...t,
+              ...fields,
+              name: fields.name !== undefined ? String(fields.name).slice(0, 60) : t.name,
+              capacity:
+                fields.capacity !== undefined
+                  ? Math.max(1, Math.min(50, Math.round(Number(fields.capacity) || 8)))
+                  : t.capacity,
+            }
+          : t
+      )
+    );
+  }, [activeEvent, mutateTables]);
+
+  const deleteTable = useCallback((tableId) => {
+    if (!activeEvent) return;
+    mutateTables((tables) => tables.filter((t) => t.id !== tableId));
+    showToast('Table removed — its guests return to the unseated pool.', 'info');
+  }, [activeEvent, mutateTables, showToast]);
+
+  /** Current seat usage per table entry (attending guests only, weighted). */
+  const tableUsage = useCallback((tables, guests) => {
+    const byId = new Map((guests || []).map((g) => [g.id, g]));
+    return new Map(
+      (tables || []).map((t) => [
+        t.id,
+        (t.seats || []).reduce((sum, id) => {
+          const g = byId.get(id);
+          return sum + (g && g.rsvp === 'attending' ? seatWeight(g) : 0);
+        }, 0),
+      ])
+    );
+  }, []);
+
+  /** Seat one guest at a table — moves them off any other table first. */
+  const assignSeat = useCallback((tableId, guestId) => {
+    if (!activeEvent) return;
+    const guests = activeEvent.guests || [];
+    const guest = guests.find((g) => g.id === guestId);
+    if (!guest || guest.rsvp !== 'attending') return;
+    const tables = activeEvent.seating?.tables || [];
+    const target = tables.find((t) => t.id === tableId);
+    if (!target) return;
+
+    const usage = tableUsage(tables, guests);
+    const currentUsage = usage.get(tableId) || 0;
+    const alreadyHere = (target.seats || []).includes(guestId);
+    const weight = seatWeight(guest);
+    const freedElsewhere = tables.some((t) => t.id !== tableId && (t.seats || []).includes(guestId));
+    const projected = alreadyHere ? currentUsage : currentUsage + weight;
+    if (projected > target.capacity) {
+      showToast(`"${target.name}" is full — ${target.capacity - currentUsage} seat(s) free, ${guest.name} needs ${weight}.`, 'info');
+      return;
+    }
+
+    mutateTables((list) =>
+      list.map((t) => {
+        if (t.id === tableId) {
+          if (alreadyHere) return t;
+          return { ...t, seats: [...(t.seats || []), guestId] };
+        }
+        return { ...t, seats: (t.seats || []).filter((id) => id !== guestId) };
+      })
+    );
+    if (!alreadyHere && !freedElsewhere) {
+      showToast(`Seated ${guest.name} at ${target.name}.`, 'success');
+    }
+  }, [activeEvent, mutateTables, showToast, tableUsage]);
+
+  const unassignSeat = useCallback((guestId) => {
+    if (!activeEvent) return;
+    mutateTables((tables) =>
+      tables.map((t) => ({ ...t, seats: (t.seats || []).filter((id) => id !== guestId) }))
+    );
+  }, [activeEvent, mutateTables]);
+
+  const clearTableSeats = useCallback((tableId) => {
+    if (!activeEvent) return;
+    mutateTables((tables) => tables.map((t) => (t.id === tableId ? { ...t, seats: [] } : t)));
+  }, [activeEvent, mutateTables]);
+
+  /**
+   * Bulk-apply agent (or auto-arrange) assignments: [{ tableId, guestIds }].
+   * Replaces all existing seats in one update; capacity is enforced by
+   * dropping overflow parties (server already did this, but belt & braces).
+   * @returns {number} guests actually seated.
+   */
+  const applySeatingAssignments = useCallback((assignments) => {
+    if (!activeEvent || !Array.isArray(assignments)) return 0;
+    const guests = activeEvent.guests || [];
+    const byId = new Map(guests.map((g) => [g.id, g]));
+    const seatable = new Set(guests.filter((g) => g.rsvp === 'attending').map((g) => g.id));
+    const seatMap = new Map(); // guestId -> tableId
+    const tableLoad = new Map();
+
+    for (const a of assignments) {
+      const table = (activeEvent.seating?.tables || []).find((t) => t.id === a?.tableId);
+      if (!table) continue;
+      let used = tableLoad.get(table.id) || 0;
+      for (const gid of Array.isArray(a.guestIds) ? a.guestIds : []) {
+        const g = byId.get(gid);
+        if (!g || !seatable.has(gid) || seatMap.has(gid)) continue;
+        const w = seatWeight(g);
+        if (used + w > table.capacity) continue;
+        seatMap.set(gid, table.id);
+        used += w;
+      }
+      tableLoad.set(table.id, used);
+    }
+
+    mutateTables((tables) =>
+      tables.map((t) => ({
+        ...t,
+        seats: [...seatMap.entries()].filter(([, tid]) => tid === t.id).map(([gid]) => gid),
+      }))
+    );
+
+    const seated = seatMap.size;
+    if (seated > 0) {
+      showToast(`Seating applied — ${seated} guest ${seated === 1 ? 'party' : 'parties'} seated.`, 'success');
+    }
+    return seated;
+  }, [activeEvent, mutateTables, showToast]);
+
+  // ---------------- PAYMENT LEDGER ACTIONS ----------------
+
+  const normalizePayment = useCallback((p, fallbackDate) => ({
+    id: p.id || makeId('pay'),
+    label: String(p.label || 'Payment').trim().slice(0, 140) || 'Payment',
+    vendorName: String(p.vendorName || '').trim().slice(0, 80),
+    amount: Math.max(0, Math.round(Number(p.amount) || 0)),
+    kind: ['deposit', 'balance', 'milestone', 'final'].includes(p.kind) ? p.kind : 'milestone',
+    dueDate: /^\d{4}-\d{2}-\d{2}$/.test(p.dueDate) ? p.dueDate : fallbackDate,
+    paid: Boolean(p.paid),
+    paidDate: /^\d{4}-\d{2}-\d{2}$/.test(p.paidDate) ? p.paidDate : '',
+    notes: String(p.notes || '').slice(0, 300),
+    source: p.source === 'agent' ? 'agent' : 'manual',
+  }), []);
+
+  const addPayment = useCallback((data) => {
+    if (!activeEvent) return;
+    const payment = normalizePayment(data, activeEvent.date || new Date().toISOString().slice(0, 10));
+    setEvents((prev) =>
+      prev.map((e) => (e.id === activeEvent.id ? { ...e, payments: [payment, ...(e.payments || [])] } : e))
+    );
+    showToast(`Added payment "${payment.label}".`, 'success');
+  }, [activeEvent, normalizePayment, showToast]);
+
+  const updatePayment = useCallback((paymentId, fields) => {
+    if (!activeEvent) return;
+    setEvents((prev) =>
+      prev.map((e) => {
+        if (e.id !== activeEvent.id) return e;
+        return {
+          ...e,
+          payments: (e.payments || []).map((p) => (p.id === paymentId ? normalizePayment({ ...p, ...fields }, activeEvent.date) : p)),
+        };
+      })
+    );
+    showToast('Payment updated.', 'success');
+  }, [activeEvent, normalizePayment, showToast]);
+
+  const deletePayment = useCallback((paymentId) => {
+    if (!activeEvent) return;
+    setEvents((prev) =>
+      prev.map((e) => {
+        if (e.id !== activeEvent.id) return e;
+        return { ...e, payments: (e.payments || []).filter((p) => p.id !== paymentId) };
+      })
+    );
+    showToast('Payment removed from the ledger.', 'info');
+  }, [activeEvent, showToast]);
+
+  const togglePaymentPaid = useCallback((paymentId) => {
+    if (!activeEvent) return;
+    const today = new Date().toISOString().slice(0, 10);
+    setEvents((prev) =>
+      prev.map((e) => {
+        if (e.id !== activeEvent.id) return e;
+        return {
+          ...e,
+          payments: (e.payments || []).map((p) =>
+            p.id === paymentId ? { ...p, paid: !p.paid, paidDate: !p.paid ? today : '' } : p
+          ),
+        };
+      })
+    );
+  }, [activeEvent]);
+
+  /**
+   * Agent output lands here: replaces previous agent-generated milestones,
+   * preserving anything the host added by hand (source !== 'agent').
+   * @returns {number} milestones written.
+   */
+  const applyAgentPayments = useCallback((payments) => {
+    if (!activeEvent || !Array.isArray(payments) || payments.length === 0) return 0;
+    const fallbackDate = activeEvent.date || new Date().toISOString().slice(0, 10);
+    const generated = payments.map((p) => normalizePayment({ ...p, source: 'agent', paid: false, paidDate: '' }, fallbackDate));
+    if (generated.length === 0) return 0;
+
+    setEvents((prev) =>
+      prev.map((e) => {
+        if (e.id !== activeEvent.id) return e;
+        const manual = (e.payments || []).filter((p) => p.source !== 'agent');
+        const sorted = [...generated, ...manual].sort((a, b) => (a.dueDate || '').localeCompare(b.dueDate || ''));
+        return { ...e, payments: sorted };
+      })
+    );
+    showToast(`Payment schedule written — ${generated.length} milestones (manual entries kept).`, 'success');
+    return generated.length;
+  }, [activeEvent, normalizePayment, showToast]);
+
+  // ---------------- DAY-OF RUN SHEET ACTIONS ----------------
+
+  const normalizeRunItem = useCallback((r) => ({
+    id: r.id || makeId('run'),
+    time: /^([01]\d|2[0-3]):[0-5]\d$/.test(r.time) ? r.time : '',
+    durationMin: Math.max(5, Math.min(240, Math.round(Number(r.durationMin) || 15))),
+    activity: String(r.activity || 'Untitled cue').trim().slice(0, 200) || 'Untitled cue',
+    owner: String(r.owner || 'Host').trim().slice(0, 80) || 'Host',
+    notes: String(r.notes || '').slice(0, 300),
+    done: Boolean(r.done),
+    source: r.source === 'agent' ? 'agent' : 'manual',
+  }), []);
+
+  const addRunSheetItem = useCallback((data) => {
+    if (!activeEvent) return;
+    const item = normalizeRunItem(data);
+    setEvents((prev) =>
+      prev.map((e) => (e.id === activeEvent.id ? { ...e, runSheet: [...(e.runSheet || []), item] } : e))
+    );
+    showToast(`Added "${item.activity}" to the run sheet.`, 'success');
+  }, [activeEvent, normalizeRunItem, showToast]);
+
+  const updateRunSheetItem = useCallback((itemId, fields) => {
+    if (!activeEvent) return;
+    setEvents((prev) =>
+      prev.map((e) => {
+        if (e.id !== activeEvent.id) return e;
+        return {
+          ...e,
+          runSheet: (e.runSheet || []).map((r) => (r.id === itemId ? normalizeRunItem({ ...r, ...fields }) : r)),
+        };
+      })
+    );
+    showToast('Run-sheet cue updated.', 'success');
+  }, [activeEvent, normalizeRunItem, showToast]);
+
+  const deleteRunSheetItem = useCallback((itemId) => {
+    if (!activeEvent) return;
+    setEvents((prev) =>
+      prev.map((e) => {
+        if (e.id !== activeEvent.id) return e;
+        return { ...e, runSheet: (e.runSheet || []).filter((r) => r.id !== itemId) };
+      })
+    );
+    showToast('Cue removed.', 'info');
+  }, [activeEvent, showToast]);
+
+  const toggleRunSheetItemDone = useCallback((itemId) => {
+    if (!activeEvent) return;
+    setEvents((prev) =>
+      prev.map((e) => {
+        if (e.id !== activeEvent.id) return e;
+        return {
+          ...e,
+          runSheet: (e.runSheet || []).map((r) => (r.id === itemId ? { ...r, done: !r.done } : r)),
+        };
+      })
+    );
+  }, [activeEvent]);
+
+  /** Agent output: replace agent-sourced cues, keep manual ones. */
+  const applyAgentRunSheet = useCallback((items) => {
+    if (!activeEvent || !Array.isArray(items) || items.length === 0) return 0;
+    const generated = items.map((r) => normalizeRunItem({ ...r, done: false, source: 'agent' }));
+    if (generated.length === 0) return 0;
+
+    setEvents((prev) =>
+      prev.map((e) => {
+        if (e.id !== activeEvent.id) return e;
+        const manual = (e.runSheet || []).filter((r) => r.source !== 'agent');
+        const sorted = [...generated, ...manual].sort((a, b) => (a.time || '99:99').localeCompare(b.time || '99:99'));
+        return { ...e, runSheet: sorted };
+      })
+    );
+    showToast(`Run sheet written — ${generated.length} cues (manual cues kept).`, 'success');
+    return generated.length;
+  }, [activeEvent, normalizeRunItem, showToast]);
+
+  // ---------------- AGENT FORCE RUN LOG ----------------
+
+  /** Append one agent run to the event's history (capped at 20). */
+  const logAgentRun = useCallback((run) => {
+    if (!activeEvent) return;
+    const entry = {
+      id: makeId('agentrun'),
+      agentId: String(run?.agentId || '').slice(0, 40),
+      agentName: String(run?.agentName || 'Agent').slice(0, 80),
+      status: run?.status === 'error' ? 'error' : 'done',
+      source: run?.source === 'live-ai' ? 'live-ai' : 'local-ai-engine',
+      summary: String(run?.summary || '').slice(0, 400),
+      artifact: String(run?.artifact || '').slice(0, 200),
+      at: new Date().toISOString(),
+    };
+    setEvents((prev) =>
+      prev.map((e) => (e.id === activeEvent.id ? { ...e, agentRuns: [entry, ...(e.agentRuns || [])].slice(0, 20) } : e))
+    );
+  }, [activeEvent]);
+
   // ---------------- APPLY THEME TO EVENT ----------------
   const applyThemeToEvent = useCallback((theme) => {
     if (!activeEvent) return;
@@ -795,6 +1156,28 @@ export const EventProvider = ({ children }) => {
       addPhotos,
       updatePhoto,
       deletePhoto,
+      // Seating chart
+      addTable,
+      updateTable,
+      deleteTable,
+      assignSeat,
+      unassignSeat,
+      clearTableSeats,
+      applySeatingAssignments,
+      // Payment ledger
+      addPayment,
+      updatePayment,
+      deletePayment,
+      togglePaymentPaid,
+      applyAgentPayments,
+      // Day-of run sheet
+      addRunSheetItem,
+      updateRunSheetItem,
+      deleteRunSheetItem,
+      toggleRunSheetItemDone,
+      applyAgentRunSheet,
+      // Agent Force run log
+      logAgentRun,
       // AI Theme Application
       applyThemeToEvent,
     }),
@@ -838,6 +1221,24 @@ export const EventProvider = ({ children }) => {
       addPhotos,
       updatePhoto,
       deletePhoto,
+      addTable,
+      updateTable,
+      deleteTable,
+      assignSeat,
+      unassignSeat,
+      clearTableSeats,
+      applySeatingAssignments,
+      addPayment,
+      updatePayment,
+      deletePayment,
+      togglePaymentPaid,
+      applyAgentPayments,
+      addRunSheetItem,
+      updateRunSheetItem,
+      deleteRunSheetItem,
+      toggleRunSheetItemDone,
+      applyAgentRunSheet,
+      logAgentRun,
       applyThemeToEvent,
     ]
   );

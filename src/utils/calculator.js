@@ -219,6 +219,156 @@ export function calculateGuestStats(guests) {
 }
 
 /**
+ * Payment-schedule ledger metrics.
+ *
+ * A payment is { amount, dueDate: 'YYYY-MM-DD', paid, kind }. `nextDue` is
+ * the earliest UNPAID future (or today) milestone — the "write this cheque
+ * next" signal for the dashboard chip and ledger header.
+ *
+ * @param {Array} payments
+ * @param {Date} [referenceDate]
+ */
+export function calculatePaymentStats(payments, referenceDate = new Date()) {
+  const safePayments = Array.isArray(payments) ? payments : [];
+  const now = new Date(referenceDate.getFullYear(), referenceDate.getMonth(), referenceDate.getDate());
+
+  const total = safePayments.length;
+  let paidTotal = 0;
+  let outstandingTotal = 0;
+  let paidCount = 0;
+  let overdueCount = 0;
+  let overdueTotal = 0;
+  let nextDue = null;
+
+  for (const p of safePayments) {
+    const amount = Math.max(0, Number(p?.amount) || 0);
+    if (p?.paid) {
+      paidCount += 1;
+      paidTotal += amount;
+      continue;
+    }
+    outstandingTotal += amount;
+    const due = parseDateOnly(p?.dueDate);
+    if (due && due.getTime() < now.getTime()) {
+      overdueCount += 1;
+      overdueTotal += amount;
+    } else if (due && (!nextDue || due.getTime() < nextDue.due.getTime())) {
+      const diffDays = Math.round((due.getTime() - now.getTime()) / 86_400_000);
+      nextDue = { due, date: p.dueDate, diffDays, label: diffDays === 0 ? 'Due today' : `Due in ${diffDays}d`, amount };
+    }
+  }
+
+  return {
+    total,
+    paidCount,
+    paidTotal,
+    outstandingTotal,
+    overdueCount,
+    overdueTotal,
+    nextDue,
+  };
+}
+
+/** Strict 'YYYY-MM-DD' parser that rejects month/day rollover; null when invalid. */
+function parseDateOnly(str) {
+  if (!str || !/^\d{4}-\d{2}-\d{2}$/.test(str)) return null;
+  const [y, m, d] = str.split('-').map(Number);
+  const date = new Date(y, m - 1, d);
+  if (date.getMonth() !== m - 1 || date.getDate() !== d) return null;
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+/**
+ * Seating-chart metrics. Seats are weighted (1 + plus-ones) — see
+ * src/lib/planning/seating.js seatWeight().
+ *
+ * @param {Array} tables - [{ id, name, capacity, seats: guestId[] }]
+ * @param {Array} guests - full guest list (only attending are seatable)
+ */
+export function calculateSeatingStats(tables, guests) {
+  const safeTables = Array.isArray(tables) ? tables.filter((t) => t && t.id) : [];
+  const byId = new Map((Array.isArray(guests) ? guests : []).filter((g) => g && g.id).map((g) => [g.id, g]));
+  const seatWeightOf = (id) => {
+    const g = byId.get(id);
+    if (!g) return 1;
+    return 1 + Math.max(0, Math.min(10, Number(g.plusOnes) || 0));
+  };
+
+  const seatable = [...byId.values()].filter((g) => g.rsvp === 'attending');
+  const seatableIds = new Set(seatable.map((g) => g.id));
+
+  let capacity = 0;
+  let takenSeats = 0;
+  const seatedIds = new Set();
+  const overCapacityTables = [];
+
+  for (const table of safeTables) {
+    const cap = Math.max(1, Math.min(50, Math.round(Number(table.capacity) || 8)));
+    capacity += cap;
+    let used = 0;
+    for (const guestId of Array.isArray(table.seats) ? table.seats : []) {
+      if (!seatableIds.has(guestId) || seatedIds.has(guestId)) continue; // stale/duplicate seat
+      seatedIds.add(guestId);
+      used += seatWeightOf(guestId);
+    }
+    takenSeats += used;
+    if (used > cap) overCapacityTables.push(table.id);
+  }
+
+  return {
+    totalTables: safeTables.length,
+    totalCapacity: capacity,
+    takenSeats,
+    seatsFree: Math.max(0, capacity - takenSeats),
+    seatedCount: seatedIds.size,
+    unseatedCount: Math.max(0, seatableIds.size - seatedIds.size),
+    seatableCount: seatableIds.size,
+    overCapacityTables,
+    utilizationPct: capacity > 0 ? Math.round((takenSeats / capacity) * 100) : 0,
+  };
+}
+
+/**
+ * Day-of run-sheet metrics.
+ *
+ * @param {Array} items - [{ time: 'HH:MM', durationMin, activity, done }]
+ */
+export function calculateRunSheetStats(items) {
+  const safeItems = Array.isArray(items) ? items : [];
+  const total = safeItems.length;
+  const done = safeItems.filter((i) => Boolean(i?.done)).length;
+
+  const toMinutes = (t) => {
+    if (!t || !/^([01]\d|2[0-3]):[0-5]\d$/.test(t)) return null;
+    const [h, m] = t.split(':').map(Number);
+    return h * 60 + m;
+  };
+
+  const timed = safeItems
+    .map((i) => ({ item: i, mins: toMinutes(i?.time) }))
+    .filter((x) => x.mins !== null)
+    .sort((a, b) => a.mins - b.mins);
+
+  let spanMin = 0;
+  if (timed.length > 0) {
+    const last = timed[timed.length - 1];
+    const lastEnd = last.mins + Math.max(0, Math.min(1440, Math.round(Number(last.item.durationMin) || 0)));
+    spanMin = Math.max(0, lastEnd - timed[0].mins);
+  }
+
+  return {
+    total,
+    done,
+    pending: total - done,
+    progressPct: total > 0 ? Math.round((done / total) * 100) : 0,
+    firstAt: timed.length > 0 ? timed[0].item.time : null,
+    lastAt: timed.length > 0 ? timed[timed.length - 1].item.time : null,
+    spanHours: spanMin > 0 ? Math.round((spanMin / 60) * 10) / 10 : 0,
+    sorted: timed.map((x) => x.item),
+  };
+}
+
+/**
  * RSVP-deadline urgency for banner chips and nag badges.
  * Mirrors getDueDateUrgency()'s shape ({status, diffDays, label, color})
  * so existing chip markup can render either identically.

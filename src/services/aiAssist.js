@@ -20,6 +20,9 @@ import {
   offlineVenueRecommend,
   offlineVendorPlan,
   offlineVendorInquiry,
+  offlineSeatingPlan,
+  offlinePaymentSchedule,
+  offlineRunSheet,
 } from './assistOffline.js';
 
 export const ASSIST_ENDPOINT = '/api/ai/assist';
@@ -108,5 +111,17 @@ export const aiAssist = {
 
   assistantChat(payload) {
     return runTask('assistant-chat', payload, offlineAssistantChat);
+  },
+
+  seatingPlan(payload) {
+    return runTask('seating-plan', payload, offlineSeatingPlan);
+  },
+
+  paymentSchedule(payload) {
+    return runTask('payment-schedule', payload, offlinePaymentSchedule);
+  },
+
+  runSheet(payload) {
+    return runTask('run-sheet', payload, offlineRunSheet);
   },
 };

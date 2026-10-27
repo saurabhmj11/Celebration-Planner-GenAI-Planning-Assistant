@@ -16,6 +16,10 @@
  *  - invitation-copy : guest-facing invitation wording tuned to tone + theme
  *  - plan-review     : score + strengths + risks + next actions for the whole plan
  *  - assistant-chat  : context-aware conversational planning helper
+ *  - seating-plan    : Agent Force — assign attending guests to tables (ids only
+ *                       from the request are accepted back; anti-hallucination)
+ *  - payment-schedule : Agent Force — deposit/balance milestones from vendors
+ *  - run-sheet        : Agent Force — minute-by-minute day-of schedule
  */
 
 import { z } from "zod";
@@ -230,6 +234,93 @@ const invitationCopySchema = z
   })
   .strip();
 
+const seatingPlanSchema = z
+  .object({
+    task: z.literal("seating-plan"),
+    payload: z
+      .object({
+        eventType: eventTypeEnum,
+        tables: z
+          .array(
+            z
+              .object({
+                id: shortText(60),
+                name: shortText(60),
+                capacity: z.number().int().min(1).max(50),
+              })
+              .strip()
+          )
+          .min(1)
+          .max(30),
+        guests: z
+          .array(
+            z
+              .object({
+                id: shortText(60),
+                name: shortText(80),
+                group: shortText(40),
+                plusOnes: z.number().int().min(0).max(10),
+                meal: shortText(30),
+                notes: shortText(120).optional(),
+              })
+              .strip()
+          )
+          .min(0)
+          .max(150),
+      })
+      .strip(),
+  })
+  .strip();
+
+const paymentScheduleSchema = z
+  .object({
+    task: z.literal("payment-schedule"),
+    payload: z
+      .object({
+        eventType: eventTypeEnum,
+        eventDate: safeDate,
+        today: safeDate,
+        totalBudget: z.number().min(0).max(100_000_000),
+        vendors: z
+          .array(
+            z
+              .object({
+                name: shortText(80),
+                category: shortText(40),
+                cost: z.number().min(0).max(100_000_000),
+                status: shortText(30),
+              })
+              .strip()
+          )
+          .min(0)
+          .max(30),
+      })
+      .strip(),
+  })
+  .strip();
+
+const runSheetSchema = z
+  .object({
+    task: z.literal("run-sheet"),
+    payload: z
+      .object({
+        eventType: eventTypeEnum,
+        eventTitle: shortText(120),
+        eventDate: safeDate,
+        eventTime: z
+          .string()
+          .regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Expected HH:MM"),
+        durationHours: z.number().min(1).max(18),
+        venueName: shortText(160).optional(),
+        guestCount: z.number().int().min(0).max(100_000),
+        vendorCount: z.number().int().min(0).max(500),
+        vendors: z.array(shortText(80)).max(15),
+        highlights: z.array(shortText(90)).max(8),
+      })
+      .strip(),
+  })
+  .strip();
+
 export const assistRequestSchema = z.discriminatedUnion("task", [
   budgetPlanSchema,
   timelinePlanSchema,
@@ -239,6 +330,9 @@ export const assistRequestSchema = z.discriminatedUnion("task", [
   invitationCopySchema,
   planReviewSchema,
   assistantChatSchema,
+  seatingPlanSchema,
+  paymentScheduleSchema,
+  runSheetSchema,
 ]);
 
 export type AssistRequest = z.infer<typeof assistRequestSchema>;
@@ -252,6 +346,9 @@ export const ASSIST_TASKS = [
   "invitation-copy",
   "plan-review",
   "assistant-chat",
+  "seating-plan",
+  "payment-schedule",
+  "run-sheet",
 ] as const;
 
 export type AssistTaskId = (typeof ASSIST_TASKS)[number];

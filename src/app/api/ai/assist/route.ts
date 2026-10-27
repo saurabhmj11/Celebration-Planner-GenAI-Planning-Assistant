@@ -7,6 +7,8 @@ import {
   ASSIST_SYSTEM_PROMPT,
   withTimelineCeiling,
   withVenueCandidateIds,
+  withSeatingIds,
+  withPaymentWindow,
 } from "@/lib/ai/assist/tasks";
 import { checkRateLimit, getClientKey } from "@/lib/security/rateLimit";
 import {
@@ -126,6 +128,18 @@ export function createAssistPostHandler(runEngine: RunEngine) {
               parsedJson,
               payload.candidates.map((c) => c.id)
             );
+          }
+          if (task === "seating-plan") {
+            parsedJson = withSeatingIds(parsedJson, {
+              tables: payload.tables.map((t) => ({ id: t.id, capacity: t.capacity })),
+              guestWeights: payload.guests.map((g) => ({
+                id: g.id,
+                weight: 1 + g.plusOnes,
+              })),
+            });
+          }
+          if (task === "payment-schedule") {
+            parsedJson = withPaymentWindow(parsedJson, payload.today, payload.eventDate);
           }
           const data = registry.normalize(parsedJson);
           if (!data) {

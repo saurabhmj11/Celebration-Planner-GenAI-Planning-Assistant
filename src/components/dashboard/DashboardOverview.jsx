@@ -103,6 +103,8 @@ const DashboardOverviewComponent = ({
         onFindVenue={() => onNavigate('venues')}
         onManageGuests={() => onNavigate('guests')}
         onSharePhotos={() => onNavigate('photos')}
+        onOpenAgentForce={() => onNavigate('force')}
+        onOpenDayOf={() => onNavigate('dayof')}
         onOpenPrint={() => onNavigate('print')}
         onEditEvent={onEditEvent}
       />

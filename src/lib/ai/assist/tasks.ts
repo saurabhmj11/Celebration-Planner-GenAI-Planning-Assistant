@@ -594,6 +594,280 @@ ${JSON_RULES}`,
 };
 
 /* ------------------------------------------------------------------ */
+/* 6b. Seating plan (Agent Force — Seating Strategist)                 */
+/* ------------------------------------------------------------------ */
+
+export interface SeatingPlanResult {
+  summary: string;
+  assignments: { tableId: string; guestIds: string[] }[];
+  notes: string[];
+}
+
+const seatingTask: AssistTask<
+  Extract<AssistRequest, { task: "seating-plan" }>["payload"],
+  SeatingPlanResult
+> = {
+  systemHint: "reception seating strategy and table assignment",
+  buildUserPrompt: (p) => `
+Assign these confirmed guests to tables for a ${p.eventType}.
+
+Tables (id | name | seats):
+${p.tables.map((t) => `- ${t.id} | ${t.name} | ${t.capacity} seats`).join("\n")}
+
+Attending guests (id | name | group | party size incl. plus-ones | meal | notes):
+${
+  p.guests.length
+    ? p.guests
+        .map(
+          (g) =>
+            `- ${g.id} | ${g.name} | ${g.group} | party of ${1 + g.plusOnes} | ${g.meal}${
+              g.notes ? ` | ${g.notes}` : ""
+            }`
+        )
+        .join("\n")
+    : "- (no attending guests yet)"
+}
+
+Respond strictly in valid JSON matching exactly this schema:
+{
+  "summary": "One-sentence seating strategy (under 200 chars)",
+  "assignments": [
+    { "tableId": "the table id exactly as listed", "guestIds": ["guest ids exactly as listed"] }
+  ],
+  "notes": ["Seating rationale worth telling the host (under 160 chars)"]
+}
+Rules:
+- Every "tableId" and "guestId" must be copied EXACTLY from the lists above; never invent ids.
+- A guest entry occupies 1 + plusOnes seats; the sum per table must never exceed its capacity.
+- Keep same-group guests at the same table when they fit; split a group only when it cannot fit any single table.
+- Seat as many guests as capacity allows; guests that fit nowhere are simply left out of assignments.
+- Include a table in assignments even when you leave it empty only if that is deliberate (note why).
+${JSON_RULES}`,
+  normalize: (parsed) => {
+    if (typeof parsed !== "object" || parsed === null) return null;
+    const obj = parsed as Record<string, unknown>;
+    // Valid ids are injected onto the parsed payload by the route via
+    // withSeatingIds() — same anti-hallucination pattern as venue-recommend.
+    const rawTableIds = Array.isArray(obj._validTableIds) ? obj._validTableIds : [];
+    const rawGuestIds = Array.isArray(obj._validGuestIds) ? obj._validGuestIds : [];
+    const tableIds = new Set(rawTableIds.map(String));
+    const guestIds = new Set(rawGuestIds.map(String));
+
+    const capacities = new Map<string, number>();
+    const weights = new Map<string, number>();
+    (obj._seatingMeta as SeatingMeta | undefined)?.tables?.forEach((t) => capacities.set(String(t.id), t.capacity));
+    (obj._seatingMeta as SeatingMeta | undefined)?.guestWeights?.forEach((g) => weights.set(String(g.id), g.weight));
+    const weightOf = (id: string) => weights.get(id) ?? 1;
+    const capacityOf = (id: string) => capacities.get(id) ?? 0;
+
+    const rawAssignments = Array.isArray(obj.assignments) ? obj.assignments : [];
+    const seated = new Set<string>();
+    const assignments: SeatingPlanResult["assignments"] = [];
+
+    for (const a of rawAssignments) {
+      if (typeof a !== "object" || a === null) continue;
+      const rec = a as Record<string, unknown>;
+      const tableId = str(rec.tableId, 60);
+      if (!tableId || !tableIds.has(tableId)) continue;
+      const ids = (Array.isArray(rec.guestIds) ? rec.guestIds : [])
+        .map((g) => str(g, 60))
+        .filter((id) => id && guestIds.has(id) && !seated.has(id));
+
+      // Enforce capacity server-side: never trust model arithmetic.
+      const accepted: string[] = []
+      let used = 0;
+      for (const id of ids) {
+        const w = weightOf(id);
+        if (used + w > capacityOf(tableId)) break;
+        accepted.push(id);
+        seated.add(id);
+        used += w;
+      }
+      if (accepted.length > 0) assignments.push({ tableId, guestIds: accepted });
+    }
+
+    const summary = str(obj.summary, 260);
+    if (!summary) return null;
+    return {
+      summary,
+      assignments,
+      notes: strList(obj.notes, 5, 200),
+    };
+  },
+};
+
+interface SeatingMeta {
+  tables: { id: string; capacity: number }[];
+  guestWeights: { id: string; weight: number }[];
+}
+
+/* ------------------------------------------------------------------ */
+/* 6c. Payment schedule (Agent Force — Payment Controller)             */
+/* ------------------------------------------------------------------ */
+
+export interface PaymentScheduleResult {
+  summary: string;
+  payments: {
+    label: string;
+    vendorName?: string;
+    amount: number;
+    kind: "deposit" | "balance" | "milestone" | "final";
+    dueDate: string;
+    notes?: string;
+  }[];
+}
+
+const paymentTask: AssistTask<
+  Extract<AssistRequest, { task: "payment-schedule" }>["payload"],
+  PaymentScheduleResult
+> = {
+  systemHint: "event cashflow scheduling and vendor payment structuring",
+  buildUserPrompt: (p) => `
+Build a payment schedule for a ${p.eventType} on ${p.eventDate} (today is ${p.today}).
+- Total budget: $${p.totalBudget}
+- Vendors (name | category | contracted cost | status):
+${
+  p.vendors.length
+    ? p.vendors
+        .map((v) => `- ${v.name} | ${v.category} | $${v.cost} | ${v.status}`)
+        .join("\n")
+    : "- (no vendors logged yet — schedule around the total budget instead)"
+}
+
+Respond strictly in valid JSON matching exactly this schema:
+{
+  "summary": "One-sentence cashflow strategy (under 200 chars)",
+  "payments": [
+    { "label": "What this payment is for (under 90 chars)", "vendorName": "Vendor name exactly as listed, or omit", "amount": 1234, "kind": "deposit|balance|milestone|final", "dueDate": "YYYY-MM-DD", "notes": "Why this date, in one line (under 140 chars)" }
+  ]
+}
+Rules:
+- Every dueDate must be a real calendar date between ${p.today} and ${p.eventDate} (inclusive).
+- Deposits (typically 25-50%) early; balances due 7-14 days before the event, never after.
+- Amounts are whole dollars. Per-vendor payments must sum to about that vendor's cost when both deposit and balance are listed.
+- Order payments chronologically. 4 to 12 payments total.
+${JSON_RULES}`,
+  normalize: (parsed) => {
+    if (typeof parsed !== "object" || parsed === null) return null;
+    const obj = parsed as Record<string, unknown>;
+    // Window injected by the route via withPaymentWindow().
+    const min = typeof obj._minDate === "string" ? obj._minDate : undefined;
+    const max = typeof obj._maxDate === "string" ? obj._maxDate : undefined;
+
+    const kinds = new Set(["deposit", "balance", "milestone", "final"]);
+    const rawPayments = Array.isArray(obj.payments) ? obj.payments : [];
+
+    const payments = rawPayments
+      .map((pmt) => {
+        if (typeof pmt !== "object" || pmt === null) return null;
+        const rec = pmt as Record<string, unknown>;
+        const label = str(rec.label, 120);
+        if (!label) return null;
+        let dueDate = str(rec.dueDate, 10);
+        if (min && max) {
+          dueDate = isSafeDateString(dueDate) ? dueDate : max;
+          if (dueDate < min) dueDate = min;
+          if (dueDate > max) dueDate = max;
+        }
+        const vendorName = str(rec.vendorName, 80) || undefined;
+        const kindRaw = str(rec.kind, 20);
+        return {
+          label,
+          vendorName,
+          amount: Math.max(0, Math.round(clampInt(rec.amount, 0, 100_000_000))),
+          kind: (kinds.has(kindRaw) ? kindRaw : "milestone") as PaymentScheduleResult["payments"][number]["kind"],
+          dueDate,
+          notes: str(rec.notes, 180) || undefined,
+        };
+      })
+      .filter((pmt): pmt is PaymentScheduleResult["payments"][number] => pmt !== null)
+      .slice(0, 12);
+
+    if (payments.length < 1) return null;
+    payments.sort((a, b) => a.dueDate.localeCompare(b.dueDate));
+
+    return {
+      summary: str(obj.summary, 260) || "A deposit-and-balance payment schedule.",
+      payments,
+    };
+  },
+};
+
+/* ------------------------------------------------------------------ */
+/* 6d. Run sheet (Agent Force — Day-Of Producer)                       */
+/* ------------------------------------------------------------------ */
+
+export interface RunSheetResult {
+  summary: string;
+  items: {
+    time: string;
+    durationMin: number;
+    activity: string;
+    owner: string;
+    notes?: string;
+  }[];
+}
+
+const runSheetTask: AssistTask<
+  Extract<AssistRequest, { task: "run-sheet" }>["payload"],
+  RunSheetResult
+> = {
+  systemHint: "event-day production scheduling and stage management",
+  buildUserPrompt: (p) => `
+Produce the day-of run sheet for "${p.eventTitle}" (${p.eventType}) on ${p.eventDate}.
+- Doors/starts: ${p.eventTime} — plan roughly ${p.durationHours} hours total including setup and teardown
+- Venue: ${p.venueName || "to be confirmed"}
+- Guests: ${p.guestCount} | Booked vendors: ${p.vendorCount}${p.vendors.length ? ` (${p.vendors.join(", ")})` : ""}
+- Open planning items to weave in: ${p.highlights.length ? p.highlights.join("; ") : "none logged"}
+
+Respond strictly in valid JSON matching exactly this schema:
+{
+  "summary": "One-sentence production approach (under 200 chars)",
+  "items": [
+    { "time": "HH:MM 24h", "durationMin": 30, "activity": "What happens (under 90 chars)", "owner": "Who runs it — role like Venue Team, Catering, DJ, Host (under 40 chars)", "notes": "Operational detail (under 120 chars)" }
+  ]
+}
+Rules:
+- 8 to 16 items in chronological order starting with vendor setup (at least 2-3 hours before ${p.eventTime}) and ending with teardown.
+- Every "time" is zero-padded 24-hour HH:MM; durations are whole minutes 5-240.
+- Name real owners from the vendor list above where possible; use roles, not placeholder text.
+- Include guest-arrival, the headline moments, catering service, and closing.
+${JSON_RULES}`,
+  normalize: (parsed) => {
+    if (typeof parsed !== "object" || parsed === null) return null;
+    const obj = parsed as Record<string, unknown>;
+    const rawItems = Array.isArray(obj.items) ? obj.items : [];
+
+    const items = rawItems
+      .map((it) => {
+        if (typeof it !== "object" || it === null) return null;
+        const rec = it as Record<string, unknown>;
+        const activity = str(rec.activity, 140);
+        const timeRaw = str(rec.time, 8);
+        if (!activity) return null;
+        const time = /^([01]\d|2[0-3]):[0-5]\d$/.test(timeRaw) ? timeRaw : "";
+        return {
+          time,
+          durationMin: clampInt(rec.durationMin, 5, 240),
+          activity,
+          owner: str(rec.owner, 60) || "Host",
+          notes: str(rec.notes, 160) || undefined,
+        };
+      })
+      .filter((it): it is RunSheetResult["items"][number] => it !== null)
+      .slice(0, 16);
+
+    if (items.length < 3) return null;
+    items.sort((a, b) => a.time.localeCompare(b.time));
+
+    return {
+      summary: str(obj.summary, 260) || "A minute-by-minute run sheet for the big day.",
+      items,
+    };
+  },
+};
+
+/* ------------------------------------------------------------------ */
 /* Registry                                                           */
 /* ------------------------------------------------------------------ */
 
@@ -606,6 +880,9 @@ export const ASSIST_TASK_REGISTRY = {
   "invitation-copy": invitationTask,
   "plan-review": reviewTask,
   "assistant-chat": chatTask,
+  "seating-plan": seatingTask,
+  "payment-schedule": paymentTask,
+  "run-sheet": runSheetTask,
 } as const;
 
 export type AssistTaskKey = keyof typeof ASSIST_TASK_REGISTRY;
@@ -632,6 +909,39 @@ export function withTimelineCeiling(parsed: unknown, ceilingDate: string): unkno
 export function withVenueCandidateIds(parsed: unknown, candidateIds: string[]): unknown {
   if (typeof parsed === "object" && parsed !== null) {
     return { ...(parsed as Record<string, unknown>), _validVenueIds: candidateIds };
+  }
+  return parsed;
+}
+
+/**
+ * Tag a parsed seating-plan response with the valid table/guest ids AND the
+ * capacity/weight metadata the server uses to enforce capacity itself.
+ */
+export function withSeatingIds(
+  parsed: unknown,
+  meta: {
+    tables: { id: string; capacity: number }[];
+    guestWeights: { id: string; weight: number }[];
+  }
+): unknown {
+  if (typeof parsed === "object" && parsed !== null) {
+    return {
+      ...(parsed as Record<string, unknown>),
+      _validTableIds: meta.tables.map((t) => t.id),
+      _validGuestIds: meta.guestWeights.map((g) => g.id),
+      _seatingMeta: meta,
+    };
+  }
+  return parsed;
+}
+
+/**
+ * Tag a parsed payment-schedule response with the allowed date window so the
+ * normalizer can clamp every dueDate into [min, max] without the model seeing it.
+ */
+export function withPaymentWindow(parsed: unknown, minDate: string, maxDate: string): unknown {
+  if (typeof parsed === "object" && parsed !== null) {
+    return { ...(parsed as Record<string, unknown>), _minDate: minDate, _maxDate: maxDate };
   }
   return parsed;
 }

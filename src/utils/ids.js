@@ -67,11 +67,11 @@ function needsRepair(list) {
 
 /**
  * Repair one event's collections (tasks / vendors / expenses / guests /
- * photos) so every item carries a unique id. Heals data written by the old
- * `task-${Date.now()}` bug — e.g. a timeline holding two
- * `task-1793034912847` entries collapses back to one. Clean events are
- * returned untouched (same reference), so referential equality/renders stay
- * stable for healthy data.
+ * photos / payments / runSheet / agentRuns) so every item carries a unique
+ * id. Heals data written by the old `task-${Date.now()}` bug — e.g. a
+ * timeline holding two `task-1793034912847` entries collapses back to one.
+ * Clean events are returned untouched (same reference), so referential
+ * equality/renders stay stable for healthy data.
  */
 export function sanitizeEvent(event) {
   if (!event || typeof event !== 'object') return event;
@@ -80,7 +80,11 @@ export function sanitizeEvent(event) {
     needsRepair(event.vendors) ||
     needsRepair(event.expenses) ||
     needsRepair(event.guests) ||
-    needsRepair(event.photos);
+    needsRepair(event.photos) ||
+    needsRepair(event.payments) ||
+    needsRepair(event.runSheet) ||
+    needsRepair(event.agentRuns) ||
+    needsRepair(event.seating?.tables);
   if (!dirty) return event;
   return {
     ...event,
@@ -89,6 +93,10 @@ export function sanitizeEvent(event) {
     expenses: dedupeById(event.expenses),
     guests: dedupeById(event.guests),
     photos: dedupeById(event.photos),
+    payments: dedupeById(event.payments),
+    runSheet: dedupeById(event.runSheet),
+    agentRuns: dedupeById(event.agentRuns),
+    seating: event.seating ? { ...event.seating, tables: dedupeById(event.seating.tables) } : event.seating,
   };
 }
 

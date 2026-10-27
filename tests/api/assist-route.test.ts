@@ -418,6 +418,182 @@ describe("POST /api/ai/assist — happy paths", () => {
     expect(userPrompt).toContain("emerald-bay-resort");
     expect(userPrompt).toContain("match score 92/100");
   });
+
+  /* ---------------------------------------------------------------- */
+  /* Agent Force tasks                                                 */
+  /* ---------------------------------------------------------------- */
+
+  test("seating-plan drops hallucinated ids and enforces capacity server-side", async () => {
+    state.responses = [
+      {
+        content: JSON.stringify({
+          summary: "Families together at the front.",
+          assignments: [
+            { tableId: "t1", guestIds: ["g1", "g2", "ghost-guest"] }, // ghost dropped
+            { tableId: "t1", guestIds: ["g1"] }, // duplicate table + already-seated guest
+            { tableId: "hallucinated-table", guestIds: ["g3"] }, // whole row dropped
+            { tableId: "t2", guestIds: ["g3"] }, // fits
+          ],
+          notes: ["Kept the Rossi family together."],
+        }),
+      },
+    ];
+
+    const res = await POST(
+      makeRequest({
+        task: "seating-plan",
+        payload: {
+          eventType: "wedding",
+          tables: [
+            { id: "t1", name: "Family Table", capacity: 4 },
+            { id: "t2", name: "Friends", capacity: 4 },
+          ],
+          guests: [
+            { id: "g1", name: "Ana", group: "family", plusOnes: 1, meal: "standard" },
+            { id: "g2", name: "Ben", group: "family", plusOnes: 0, meal: "vegan" },
+            { id: "g3", name: "Cy", group: "friends", plusOnes: 0, meal: "standard" },
+          ],
+        },
+      })
+    );
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.task).toBe("seating-plan");
+    // t1 keeps g1(2 seats)+g2(1)=3<=4; ghost id dropped; dup table merged; bad table row gone
+    const t1 = body.data.assignments.find((a: { tableId: string }) => a.tableId === "t1");
+    const t2 = body.data.assignments.find((a: { tableId: string }) => a.tableId === "t2");
+    expect(t1.guestIds).toEqual(["g1", "g2"]);
+    expect(t2.guestIds).toEqual(["g3"]);
+    expect(body.data.assignments).toHaveLength(2);
+    expect(body.data.notes[0]).toContain("Rossi");
+    // Prompt grounding: guest + table ids appear verbatim
+    const userPrompt = state.calls[0][1].content;
+    expect(userPrompt).toContain("party of 2"); // 1 + plusOne
+    expect(userPrompt).toContain("Family Table | 4 seats");
+  });
+
+  test("seating-plan truncates overflow parties instead of trusting model math", async () => {
+    state.responses = [
+      {
+        content: JSON.stringify({
+          summary: "Tight but workable.",
+          assignments: [{ tableId: "t1", guestIds: ["big1", "big2"] }],
+          notes: [],
+        }),
+      },
+    ];
+
+    const res = await POST(
+      makeRequest({
+        task: "seating-plan",
+        payload: {
+          eventType: "wedding",
+          tables: [{ id: "t1", name: "T1", capacity: 4 }],
+          guests: [
+            { id: "big1", name: "Party One", group: "family", plusOnes: 3, meal: "standard" }, // 4 seats
+            { id: "big2", name: "Party Two", group: "friends", plusOnes: 0, meal: "standard" }, // no room left
+          ],
+        },
+      })
+    );
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.data.assignments).toHaveLength(1);
+    expect(body.data.assignments[0].guestIds).toEqual(["big1"]); // big2 dropped by capacity guard
+  });
+
+  test("payment-schedule clamps dueDates into [today, eventDate] and sorts", async () => {
+    state.responses = [
+      {
+        content: JSON.stringify({
+          summary: "Deposit now, balance two weeks out.",
+          payments: [
+            { label: "Venue balance", vendorName: "Venue Co", amount: 3500, kind: "balance", dueDate: "2030-01-01" }, // after event -> clamp
+            { label: "Venue deposit", vendorName: "Venue Co", amount: 1500, kind: "deposit", dueDate: "2020-01-01" }, // before today -> clamp
+            { label: "Catering deposit", vendorName: "Caterer", amount: 900, kind: "weird-kind", dueDate: "not-a-date" }, // bad kind/date
+          ],
+        }),
+      },
+    ];
+
+    const res = await POST(
+      makeRequest({
+        task: "payment-schedule",
+        payload: {
+          eventType: "wedding",
+          eventDate: "2026-12-05",
+          today: "2026-10-27",
+          totalBudget: 20000,
+          vendors: [
+            { name: "Venue Co", category: "venue", cost: 5000, status: "booked" },
+            { name: "Caterer", category: "catering", cost: 1800, status: "deposit_paid" },
+          ],
+        },
+      })
+    );
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.task).toBe("payment-schedule");
+    const dates = body.data.payments.map((p: { dueDate: string }) => p.dueDate);
+    expect(dates).toEqual([...dates].sort());
+    expect(body.data.payments.every((p: { dueDate: string }) => p.dueDate >= "2026-10-27" && p.dueDate <= "2026-12-05")).toBe(true);
+    // unknown kind falls back to milestone; invalid date falls back to the ceiling
+    expect(body.data.payments[2].kind).toBe("milestone");
+    expect(body.data.payments[2].dueDate).toBe("2026-12-05");
+    // Prompt grounding
+    expect(state.calls[0][1].content).toContain("Venue Co | venue | $5000 | booked");
+  });
+
+  test("run-sheet sorts cues, clamps durations and repairs times", async () => {
+    state.responses = [
+      {
+        content: JSON.stringify({
+          summary: "Load-in to load-out.",
+          items: [
+            { time: "20:00", durationMin: 999, activity: "Open floor", owner: "DJ", notes: "Requests live" },
+            { time: "16:00", durationMin: 30, activity: "Doors open", owner: "" }, // empty owner -> Host
+            { time: "99:99", durationMin: 10, activity: "Bad time cue", owner: "Host" }, // invalid time -> ''
+            { activity: "No time at all", owner: "Host" },
+          ],
+        }),
+      },
+    ];
+
+    const res = await POST(
+      makeRequest({
+        task: "run-sheet",
+        payload: {
+          eventType: "birthday",
+          eventTitle: "Marcus's 30th",
+          eventDate: "2026-12-14",
+          eventTime: "20:00",
+          durationHours: 6,
+          venueName: "Velvet Sky Lounge",
+          guestCount: 55,
+          vendorCount: 3,
+          vendors: ["DJ SynthWave Pulse (entertainment)"],
+          highlights: ["Curate party playlist"],
+        },
+      })
+    );
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.task).toBe("run-sheet");
+    const timed = body.data.items.filter((i: { time: string }) => i.time);
+    const times = timed.map((i: { time: string }) => i.time);
+    expect(times).toEqual([...times].sort());
+    const openFloor = body.data.items.find((i: { activity: string }) => i.activity === "Open floor");
+    expect(openFloor.durationMin).toBe(240); // clamped from 999
+    expect(body.data.items.some((i: { owner: string }) => i.owner === "Host")).toBe(true);
+    // Invalid times survive as empty strings (sorted last), not garbage
+    expect(body.data.items.some((i: { time: string }) => i.time === "")).toBe(true);
+    expect(state.calls[0][1].content).toContain("Marcus's 30th");
+    expect(state.calls[0][1].content).toContain("Curate party playlist");
+  });
 });
 
 /* ------------------------------------------------------------------ */

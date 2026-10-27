@@ -317,5 +317,14 @@
   body.printing-invitation .invitation-card-page {
     display: flex !important;
   }
+
+  /* Printable day-of run sheet: same portal trick — only the cue sheet
+     itself reaches the printer (MC/vendor handouts). */
+  body.printing-runsheet > * {
+    display: none !important;
+  }
+  body.printing-runsheet > .runsheet-print-portal {
+    display: block !important;
+  }
 }
 /* hmr-nudge 1793019766 */

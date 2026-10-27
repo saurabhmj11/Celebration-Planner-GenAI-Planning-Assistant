@@ -1,4 +1,4 @@
-import { Wallet, Clock, Users, Sparkles, MapPinned, CalendarClock, UserPlus, Images } from 'lucide-react';
+import { Wallet, Clock, Users, Sparkles, MapPinned, CalendarClock, UserPlus, Images, Bot, ClipboardList } from 'lucide-react';
 
 export const QuickActionGrid = ({
   onAddExpense,
@@ -9,8 +9,26 @@ export const QuickActionGrid = ({
   onEditEvent,
   onManageGuests,
   onSharePhotos,
+  onOpenAgentForce,
+  onOpenDayOf,
 }) => {
   const actions = [
+    {
+      label: 'Agent Force',
+      description: 'Deploy AI agents to draft your day-of plan',
+      icon: Bot,
+      color: 'from-fuchsia-600 to-brand-600 text-fuchsia-600 bg-fuchsia-50 hover:bg-fuchsia-100',
+      badge: 'NEW',
+      action: onOpenAgentForce,
+    },
+    {
+      label: 'Day-Of Plan',
+      description: 'Run sheet, seating chart & payments',
+      icon: ClipboardList,
+      color: 'from-indigo-500 to-violet-600 text-indigo-600 bg-indigo-50 hover:bg-indigo-100',
+      badge: 'Day-Of',
+      action: onOpenDayOf,
+    },
     {
       label: 'Edit Plan',
       description: 'Change date, guests, budget or venue',
@@ -86,7 +104,7 @@ export const QuickActionGrid = ({
         </div>
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
         {actions.map((act, index) => {
           const Icon = act.icon;
           return (
