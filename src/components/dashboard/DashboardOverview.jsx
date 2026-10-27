@@ -106,6 +106,8 @@ const DashboardOverviewComponent = ({
         onOpenAgentForce={() => onNavigate('force')}
         onOpenDayOf={() => onNavigate('dayof')}
         onOpenPrint={() => onNavigate('print')}
+        onOpenGifts={() => onNavigate('gifts')}
+        onOpenMoodBoard={() => onNavigate('mood')}
         onEditEvent={onEditEvent}
       />
 

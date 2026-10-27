@@ -2,6 +2,7 @@ import React, { useRef } from 'react';
 import { useEventContext } from '../../context/EventContext';
 import { EVENT_TYPES } from '../../data/defaultData';
 import { calculateBudgetTotals, calculateTimelineStats } from '../../utils/calculator';
+import { formatCurrency } from '../../utils/formatters';
 import {
   Printer,
   Download,
@@ -149,7 +150,7 @@ export const EventPrintSummary = () => {
               Budget Status
             </span>
             <p className="font-bold text-slate-900 mt-0.5">
-              ${totalSpent.toLocaleString()} / ${totalBudget.toLocaleString()}
+              {formatCurrency(totalSpent)} / {formatCurrency(totalBudget)}
             </p>
           </div>
         </div>
@@ -161,7 +162,7 @@ export const EventPrintSummary = () => {
               Budget & Expense Summary
             </h3>
             <span className="text-xs font-bold text-slate-600">
-              Remaining: ${remainingBudget.toLocaleString()}
+              Remaining: {formatCurrency(remainingBudget)}
             </span>
           </div>
 
@@ -181,10 +182,10 @@ export const EventPrintSummary = () => {
                   <td className="py-2 font-medium text-slate-800">{exp.name}</td>
                   <td className="py-2 text-slate-500 capitalize">{exp.category}</td>
                   <td className="py-2 text-right text-slate-600">
-                    ${Number(exp.allocated || 0).toLocaleString()}
+                    {formatCurrency(exp.allocated)}
                   </td>
                   <td className="py-2 text-right font-bold text-slate-900">
-                    ${Number(exp.spent || 0).toLocaleString()}
+                    {formatCurrency(exp.spent)}
                   </td>
                   <td className="py-2 text-right">
                     <span
@@ -204,7 +205,7 @@ export const EventPrintSummary = () => {
                   Total Spending
                 </td>
                 <td className="py-2.5 text-right font-extrabold text-slate-900">
-                  ${totalSpent.toLocaleString()}
+                  {formatCurrency(totalSpent)}
                 </td>
                 <td className="py-2.5 text-right text-slate-500">
                   {totalBudget > 0 ? `${Math.round((totalSpent / totalBudget) * 100)}%` : ''}
@@ -278,7 +279,7 @@ export const EventPrintSummary = () => {
                     {vendor.phone || ''} {vendor.email ? `(${vendor.email})` : ''}
                   </td>
                   <td className="py-2 text-right font-medium text-slate-900">
-                    ${Number(vendor.cost || 0).toLocaleString()}
+                    {formatCurrency(vendor.cost)}
                   </td>
                   <td className="py-2 text-right">
                     <span className="text-[9px] font-bold uppercase px-2 py-0.5 rounded-full bg-slate-100 text-slate-700">

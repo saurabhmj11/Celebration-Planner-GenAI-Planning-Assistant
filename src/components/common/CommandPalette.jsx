@@ -59,6 +59,7 @@ export const CommandPalette = ({
   onOpenAddTask,
   onOpenAddVendor,
   onOpenApiKey,
+  onOpenCurrency,
 }) => {
   const {
     events,
@@ -66,6 +67,10 @@ export const CommandPalette = ({
     activeEventId,
     setActiveEventId,
     exportEventsData,
+    undo,
+    redo,
+    historyMeta,
+    currencyConfig,
   } = useEventContext();
 
   const { resolvedTheme, setTheme } = useTheme();
@@ -87,14 +92,19 @@ export const CommandPalette = ({
 
   const allItems = useMemo(() => {
     const base = [
-      ...buildActionItems({ resolvedTheme: mounted ? resolvedTheme : undefined }),
+      ...buildActionItems({
+        resolvedTheme: mounted ? resolvedTheme : undefined,
+        canUndo: historyMeta.canUndo,
+        canRedo: historyMeta.canRedo,
+        currencyCode: currencyConfig.code,
+      }),
       ...PALETTE_NAV_ITEMS,
     ];
     const eventItems = buildEventItems(events, { activeEventId });
     if (!query.trim()) return [...base, ...eventItems.slice(0, IDLE_EVENT_CAP)];
     // Deep search: fold the active event's rows in too.
     return [...base, ...eventItems, ...buildDataItems(activeEvent)];
-  }, [events, activeEvent, activeEventId, query, mounted, resolvedTheme]);
+  }, [events, activeEvent, activeEventId, query, mounted, resolvedTheme, historyMeta, currencyConfig]);
 
   const visible = useMemo(
     () => filterPaletteItems(allItems, query, { limitPerGroup: GROUP_RESULT_CAP }),
@@ -123,6 +133,15 @@ export const CommandPalette = ({
         break;
       case 'addVendor':
         onOpenAddVendor?.();
+        break;
+      case 'undo':
+        undo?.();
+        break;
+      case 'redo':
+        redo?.();
+        break;
+      case 'currency':
+        onOpenCurrency?.();
         break;
       case 'toggleTheme':
         setTheme(resolvedTheme === 'dark' ? 'light' : 'dark');

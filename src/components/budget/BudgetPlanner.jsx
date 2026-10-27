@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { useEventContext } from '../../context/EventContext';
 import { BUDGET_CATEGORIES } from '../../data/defaultData';
 import { calculateBudgetTotals, calculateCategoryBreakdown } from '../../utils/calculator';
+import { formatCurrency } from '../../utils/formatters';
 import { BudgetCopilot } from '../ai/BudgetCopilot';
 import {
   Wallet,
@@ -96,7 +97,7 @@ export const BudgetPlanner = ({ onOpenExpenseModal, onEditExpense }) => {
         <div className="bg-white rounded-3xl p-5 border border-slate-200/80 shadow-card">
           <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Total Event Budget</p>
           <h3 className="text-2xl font-display font-black text-slate-900 mt-1">
-            ${totalBudget.toLocaleString()}
+            {formatCurrency(totalBudget)}
           </h3>
           <p className="text-[11px] text-slate-500 mt-2">Target celebration ceiling</p>
         </div>
@@ -104,7 +105,7 @@ export const BudgetPlanner = ({ onOpenExpenseModal, onEditExpense }) => {
         <div className="bg-white rounded-3xl p-5 border border-slate-200/80 shadow-card">
           <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Total Allocated</p>
           <h3 className="text-2xl font-display font-black text-brand-700 mt-1">
-            ${totalAllocated.toLocaleString()}
+            {formatCurrency(totalAllocated)}
           </h3>
           <p className="text-[11px] text-slate-500 mt-2">
             {totalBudget > 0 ? `${Math.round((totalAllocated / totalBudget) * 100)}% of total budget` : 'No budget set'}
@@ -114,7 +115,7 @@ export const BudgetPlanner = ({ onOpenExpenseModal, onEditExpense }) => {
         <div className="bg-white rounded-3xl p-5 border border-slate-200/80 shadow-card">
           <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Actual Spent</p>
           <h3 className="text-2xl font-display font-black text-slate-900 mt-1">
-            ${totalSpent.toLocaleString()}
+            {formatCurrency(totalSpent)}
           </h3>
           <p className="text-[11px] text-slate-500 mt-2">{spentPct}% utilized</p>
         </div>
@@ -128,10 +129,10 @@ export const BudgetPlanner = ({ onOpenExpenseModal, onEditExpense }) => {
         >
           <p className="text-xs font-bold uppercase tracking-wider opacity-75">Remaining Budget</p>
           <h3 className="text-2xl font-display font-black mt-1">
-            ${remainingBudget.toLocaleString()}
+            {formatCurrency(remainingBudget)}
           </h3>
           <p className="text-[11px] mt-2 font-medium">
-            {isOverBudget ? `Exceeded by $${Math.abs(remainingBudget).toLocaleString()}` : 'Available for remaining tasks'}
+            {isOverBudget ? `Exceeded by ${formatCurrency(Math.abs(remainingBudget))}` : 'Available for remaining tasks'}
           </p>
         </div>
       </div>
@@ -149,7 +150,7 @@ export const BudgetPlanner = ({ onOpenExpenseModal, onEditExpense }) => {
             <div>
               <h4 className="font-bold text-sm">Budget Alert: Spending Limit Exceeded</h4>
               <p className="text-xs text-rose-100">
-                You have exceeded your total budget of ${totalBudget.toLocaleString()} by ${Math.abs(remainingBudget).toLocaleString()}. Consider adjusting allocations or negotiating vendor quotes.
+                You have exceeded your total budget of {formatCurrency(totalBudget)} by {formatCurrency(Math.abs(remainingBudget))}. Consider adjusting allocations or negotiating vendor quotes.
               </p>
             </div>
           </div>
@@ -191,9 +192,9 @@ export const BudgetPlanner = ({ onOpenExpenseModal, onEditExpense }) => {
                 </div>
                 <h4 className="text-xs font-bold text-slate-800 truncate">{cat.label}</h4>
                 <div className="mt-2 flex items-baseline justify-between text-xs">
-                  <span className="text-slate-900 font-extrabold">${cat.spent.toLocaleString()}</span>
+                  <span className="text-slate-900 font-extrabold">{formatCurrency(cat.spent)}</span>
                   <span className="text-[10px] text-slate-500">
-                    est. ${cat.allocated.toLocaleString()}
+                    est. {formatCurrency(cat.allocated)}
                   </span>
                 </div>
 
@@ -363,12 +364,12 @@ export const BudgetPlanner = ({ onOpenExpenseModal, onEditExpense }) => {
 
                       {/* Allocated */}
                       <td className="py-3.5 px-3 text-right font-medium text-slate-600">
-                        ${Number(exp.allocated || 0).toLocaleString()}
+                        {formatCurrency(exp.allocated)}
                       </td>
 
                       {/* Actual Spent */}
                       <td className="py-3.5 px-3 text-right font-bold text-slate-900">
-                        ${Number(exp.spent || 0).toLocaleString()}
+                        {formatCurrency(exp.spent)}
                       </td>
 
                       {/* Date */}

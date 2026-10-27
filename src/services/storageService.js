@@ -6,11 +6,16 @@ import {
   makePhotoMeta,
   DEFAULT_PHOTO_ALBUM,
 } from '../lib/photos/photoModel';
+import { normalizeGift } from '../lib/gifts/giftModel';
+import { normalizeTile, MAX_TILES } from '../lib/moodboard/moodModel';
+import { normalizeQuote, MAX_QUOTES_PER_VENDOR } from '../lib/vendors/quoteModel';
+import { normalizeCurrencyConfig, DEFAULT_CURRENCY_CONFIG } from '../lib/currency/currencyModel';
 
 const STORAGE_KEYS = {
   EVENTS: 'celebration_planner_events_v1',
   ACTIVE_ID: 'celebration_planner_active_id_v1',
   API_KEY: 'celebration_gemini_api_key_v1',
+  CURRENCY: 'celebration_planner_currency_v1',
 };
 
 /** Hard limits so a hostile import file can never bloat or poison local state. */
@@ -81,13 +86,38 @@ function normalizeImportedEvent(ev) {
     completed: Boolean(t.completed),
   }));
 
-  const vendors = safeItemList(ev.vendors).map((v) => ({
-    id: safeString(v.id, 100),
-    name: safeString(v.name, 200),
-    category: safeString(v.category, 60),
-    status: safeString(v.status, 40),
-    cost: safeNumber(v.cost, IMPORT_LIMITS.MAX_BUDGET),
-  }));
+  const vendors = safeItemList(ev.vendors).map((v) => {
+    const quotes = safeItemList(v.quotes, MAX_QUOTES_PER_VENDOR)
+      .map((q) => {
+        const normalized = normalizeQuote(q);
+        return normalized ? { ...normalized, id: normalized.id || makeId('quote') } : null;
+      })
+      .filter(Boolean);
+    return {
+      id: safeString(v.id, 100),
+      name: safeString(v.name, 200),
+      category: safeString(v.category, 60),
+      status: safeString(v.status, 40),
+      cost: safeNumber(v.cost, IMPORT_LIMITS.MAX_BUDGET),
+      quotes,
+    };
+  });
+
+  // Gift registry — name is mandatory, everything else normalizes to safe defaults.
+  const gifts = safeItemList(ev.gifts)
+    .map((g) => {
+      const normalized = normalizeGift(g);
+      return normalized ? { ...normalized, id: normalized.id || makeId('gift') } : null;
+    })
+    .filter(Boolean);
+
+  // Mood board tiles — invalid hex / non-http image URLs are dropped, not stored.
+  const moodTiles = safeItemList(ev.moodboard?.tiles, MAX_TILES)
+    .map((t) => {
+      const normalized = normalizeTile(t);
+      return normalized ? { ...normalized, id: normalized.id || makeId('tile') } : null;
+    })
+    .filter(Boolean);
 
   // Guest list — enum-normalized, capped, and always carrying a unique id.
   const guests = safeItemList(ev.guests, IMPORT_LIMITS.MAX_GUESTS_PER_EVENT)
@@ -154,6 +184,8 @@ function normalizeImportedEvent(ev) {
     tasks,
     vendors,
     guests,
+    gifts,
+    moodboard: moodTiles.length > 0 ? { tiles: moodTiles } : { tiles: [] },
     invitation: finalInvitation,
     photos,
   };
@@ -222,6 +254,28 @@ export const storageService = {
       return '';
     } catch {
       return '';
+    }
+  },
+
+  /** Display-currency config (code + convert toggle + rate overrides). */
+  getCurrency() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEYS.CURRENCY);
+      if (!raw) return { ...DEFAULT_CURRENCY_CONFIG };
+      return normalizeCurrencyConfig(JSON.parse(raw));
+    } catch {
+      return { ...DEFAULT_CURRENCY_CONFIG };
+    }
+  },
+
+  saveCurrency(config) {
+    try {
+      const normalized = normalizeCurrencyConfig(config);
+      localStorage.setItem(STORAGE_KEYS.CURRENCY, JSON.stringify(normalized));
+      return normalized;
+    } catch (e) {
+      console.error('Error saving currency config', e);
+      return { ...DEFAULT_CURRENCY_CONFIG };
     }
   },
 

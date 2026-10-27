@@ -5,6 +5,7 @@ import { MapContainer, TileLayer, Marker, Popup, useMap, useMapEvents } from 're
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import './venueMap.css';
+import { formatCurrency } from '../../utils/formatters';
 
 /**
  * Interactive venue map — Leaflet + OpenStreetMap (no API key required).
@@ -75,7 +76,7 @@ export default function VenueMap({
   highlightedId = null,
   focus = null, // {lat,lng} to fly to
   onSelect = () => {},
-  formatCost = (n) => `$${n.toLocaleString()}`,
+  formatCost = (n) => formatCurrency(n),
 }) {
   const markers = useMemo(
     () =>

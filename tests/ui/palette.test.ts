@@ -41,12 +41,12 @@ const sampleEvents = [
 ];
 
 describe('PALETTE_NAV_ITEMS', () => {
-  test('mirrors all 11 navbar tabs with unique ids and navigate actions', () => {
-    expect(PALETTE_NAV_ITEMS.length).toBe(11);
+  test('mirrors all 13 navbar tabs with unique ids and navigate actions', () => {
+    expect(PALETTE_NAV_ITEMS.length).toBe(13);
     const ids = new Set(PALETTE_NAV_ITEMS.map((i) => i.id));
-    expect(ids.size).toBe(11);
+    expect(ids.size).toBe(13);
     const tabs = new Set(PALETTE_NAV_ITEMS.map((i) => i.action.tab));
-    expect(tabs.size).toBe(11);
+    expect(tabs.size).toBe(13);
     for (const item of PALETTE_NAV_ITEMS) {
       expect(item.action.type).toBe('navigate');
       expect(item.group).toBe('Go to');
@@ -56,8 +56,8 @@ describe('PALETTE_NAV_ITEMS', () => {
 
   test('contains every primary tab id used by PlannerApp', () => {
     const expected = [
-      'dashboard', 'force', 'budget', 'timeline', 'guests', 'dayof',
-      'photos', 'venues', 'vendors', 'ai', 'print',
+      'dashboard', 'force', 'budget', 'timeline', 'guests', 'gifts', 'dayof',
+      'photos', 'venues', 'vendors', 'ai', 'mood', 'print',
     ];
     const tabs = PALETTE_NAV_ITEMS.map((i) => i.action.tab);
     for (const tab of expected) expect(tabs).toContain(tab);
@@ -65,13 +65,30 @@ describe('PALETTE_NAV_ITEMS', () => {
 });
 
 describe('buildActionItems', () => {
-  test('exposes the 8 quick actions with stable ids', () => {
+  test('exposes the 11 quick actions with stable ids', () => {
     const items = buildActionItems({ resolvedTheme: 'light' });
     expect(items.map((i) => i.id)).toEqual([
       'act-new-event', 'act-add-expense', 'act-add-task', 'act-add-vendor',
+      'act-undo', 'act-redo', 'act-currency',
       'act-toggle-theme', 'act-export-backup', 'act-ai-settings', 'act-print-master',
     ]);
     expect(items.every((i) => i.group === 'Actions')).toBe(true);
+  });
+
+  test('history and currency actions reflect availability and active currency', () => {
+    const ready = buildActionItems({ resolvedTheme: 'light', canUndo: true, canRedo: true, currencyCode: 'EUR' });
+    expect(ready.find((i) => i.id === 'act-undo')?.hint).toContain('Ctrl+Z');
+    expect(ready.find((i) => i.id === 'act-redo')?.hint).toContain('Ctrl+Shift+Z');
+    expect(ready.find((i) => i.id === 'act-currency')?.hint).toContain('EUR');
+
+    const fresh = buildActionItems({ resolvedTheme: 'light' });
+    expect(fresh.find((i) => i.id === 'act-undo')?.hint).toBe('Nothing to undo yet');
+    expect(fresh.find((i) => i.id === 'act-redo')?.hint).toBe('Nothing to redo yet');
+    expect(fresh.find((i) => i.id === 'act-currency')?.hint).toContain('USD');
+    // Action payloads stay wire-stable.
+    expect(ready.find((i) => i.id === 'act-undo')?.action).toEqual({ type: 'undo' });
+    expect(ready.find((i) => i.id === 'act-redo')?.action).toEqual({ type: 'redo' });
+    expect(ready.find((i) => i.id === 'act-currency')?.action).toEqual({ type: 'currency' });
   });
 
   test('theme action label always describes the switch it will perform', () => {

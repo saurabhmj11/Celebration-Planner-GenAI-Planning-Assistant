@@ -6,6 +6,8 @@
  * fixing the mixed "2026-11-20" vs "Fri, Nov 20, 2026" friction.
  */
 
+import { formatMoney } from '../lib/currency/currencyModel';
+
 /**
  * Format a YYYY-MM-DD string as a friendly localized date.
  * Falls back to a placeholder when the date is missing or malformed.
@@ -38,13 +40,14 @@ export function formatShortDate(dateStr, { fallback = '—' } = {}) {
 }
 
 /**
- * Format a number as USD currency with thousands separators.
- * @param {number} value
+ * Format a stored USD amount in the user's chosen display currency.
+ * Display config (code + convert toggle + rates) lives in
+ * src/lib/currency/currencyModel.js and is hydrated by EventContext, so
+ * switching currency re-renders every surface that renders money.
+ * @param {number} value - amount stored in USD
  */
 export function formatCurrency(value) {
-  const n = Number(value);
-  if (!Number.isFinite(n)) return '$0';
-  return `$${Math.round(n).toLocaleString('en-US')}`;
+  return formatMoney(value);
 }
 
 /**

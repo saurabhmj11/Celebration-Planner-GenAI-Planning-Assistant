@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useEventContext } from '../../context/EventContext';
 import { geminiService, GEMINI_MODEL } from '../../services/geminiService.js';
 import { CURATED_THEMES } from '../../data/defaultData.js';
+import { formatCurrency } from '../../utils/formatters';
 import {
   Sparkles,
   Key,
@@ -261,7 +262,7 @@ export const ThemeIdeaStudio = ({ onOpenApiKey }) => {
               <span>•</span>
               <span>{activeEvent.guestCount} guests</span>
               <span>•</span>
-              <span>${Number(activeEvent.budget || 0).toLocaleString()} budget</span>
+              <span>{formatCurrency(Number(activeEvent.budget || 0))} budget</span>
             </div>
           </div>
 

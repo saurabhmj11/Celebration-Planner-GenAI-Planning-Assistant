@@ -3,6 +3,8 @@ import { useEventContext } from '../../context/EventContext';
 import { VENDOR_CATEGORIES, VENDOR_STATUSES } from '../../data/defaultData';
 import { calculateVendorStats } from '../../utils/calculator';
 import { VendorAI } from '../ai/VendorAI';
+import { QuoteCompareModal } from './QuoteCompareModal';
+import { formatCurrency } from '../../utils/formatters';
 import {
   Users,
   Plus,
@@ -14,7 +16,8 @@ import {
   Star,
   Edit2,
   Trash2,
-  ArrowUpDown
+  ArrowUpDown,
+  Scale
 } from 'lucide-react';
 
 export const VendorChecklist = ({ onOpenVendorModal, onEditVendor }) => {
@@ -24,12 +27,23 @@ export const VendorChecklist = ({ onOpenVendorModal, onEditVendor }) => {
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [selectedStatus, setSelectedStatus] = useState('all');
   const [sortBy, setSortBy] = useState('cost'); // cost, name, rating
+  const [isCompareOpen, setIsCompareOpen] = useState(false);
+  const [compareCategory, setCompareCategory] = useState(null);
 
   const vendors = useMemo(() => activeEvent?.vendors || [], [activeEvent?.vendors]);
   const { totalVendors, bookedCount, totalCommittedCost } = useMemo(
     () => calculateVendorStats(vendors),
     [vendors]
   );
+  const totalQuotes = useMemo(
+    () => vendors.reduce((sum, v) => sum + (Array.isArray(v.quotes) ? v.quotes.length : 0), 0),
+    [vendors]
+  );
+
+  const openCompare = (category = null) => {
+    setCompareCategory(category);
+    setIsCompareOpen(true);
+  };
 
   // Filtered & Sorted
   const filteredVendors = useMemo(() => {
@@ -82,6 +96,17 @@ export const VendorChecklist = ({ onOpenVendorModal, onEditVendor }) => {
         </button>
       </div>
 
+      <div className="flex flex-wrap items-center gap-2">
+        <button
+          onClick={() => openCompare(null)}
+          disabled={totalQuotes === 0}
+          className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-2xl text-xs font-bold text-brand-800 bg-brand-50 border border-brand-200 hover:bg-brand-100 transition-all disabled:opacity-50 disabled:cursor-not-allowed shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+        >
+          <Scale className="w-4 h-4" aria-hidden="true" />
+          <span>Compare Quotes ({totalQuotes})</span>
+        </button>
+      </div>
+
       {/* KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="bg-white rounded-3xl p-5 border border-slate-200/80 shadow-card">
@@ -105,10 +130,10 @@ export const VendorChecklist = ({ onOpenVendorModal, onEditVendor }) => {
         <div className="bg-white rounded-3xl p-5 border border-slate-200/80 shadow-card">
           <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Committed Quotes</p>
           <h3 className="text-2xl font-display font-black text-slate-900 mt-1">
-            ${totalCommittedCost.toLocaleString()}
+            {formatCurrency(totalCommittedCost)}
           </h3>
           <p className="text-[11px] text-slate-500 mt-2">
-            Budget ceiling: ${Number(activeEvent.budget || 0).toLocaleString()}
+            Budget ceiling: {formatCurrency(activeEvent.budget)}
           </p>
         </div>
       </div>
@@ -281,8 +306,19 @@ export const VendorChecklist = ({ onOpenVendorModal, onEditVendor }) => {
                         Estimated Quote
                       </span>
                       <span className="text-sm font-extrabold text-slate-900">
-                        ${Number(vendor.cost || 0).toLocaleString()}
+                        {formatCurrency(vendor.cost)}
                       </span>
+                      {Array.isArray(vendor.quotes) && vendor.quotes.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => openCompare(vendor.category)}
+                          className="ml-2 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 transition-colors align-middle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
+                          title={`Compare ${vendor.quotes.length} quote${vendor.quotes.length === 1 ? '' : 's'} in this category`}
+                        >
+                          <Scale className="w-3 h-3" aria-hidden="true" />
+                          {vendor.quotes.length} quote{vendor.quotes.length === 1 ? '' : 's'}
+                        </button>
+                      )}
                     </div>
 
                     <div className="flex items-center gap-1">
@@ -312,6 +348,12 @@ export const VendorChecklist = ({ onOpenVendorModal, onEditVendor }) => {
           </div>
         )}
       </div>
+
+      <QuoteCompareModal
+        isOpen={isCompareOpen}
+        onClose={() => setIsCompareOpen(false)}
+        initialCategory={compareCategory}
+      />
     </div>
   );
 };

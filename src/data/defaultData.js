@@ -220,8 +220,14 @@ export const INITIAL_EVENTS = [
     ],
     vendors: [
       { id: 'v-1', name: 'Napa Valley Vista Winery', category: 'venue', contactPerson: 'Clara Beaumont', phone: '(707) 555-0192', email: 'events@napavistawinery.com', cost: 9500, status: 'booked', rating: 5, notes: 'Access allowed starting at 11:00 AM on wedding day' },
-      { id: 'v-2', name: 'Artisan Vineyard Table Catering', category: 'catering', contactPerson: 'Chef Mateo Rossi', phone: '(707) 555-8314', email: 'mateo@vineyardtable.com', cost: 7800, status: 'booked', rating: 5, notes: 'Special gluten-free and vegan plates arranged' },
-      { id: 'v-3', name: 'Lumiere Fine Art Wedding Studios', category: 'photography', contactPerson: 'Elena Rostova', phone: '(415) 555-7721', email: 'contact@lumiereart.com', cost: 4200, status: 'deposit_paid', rating: 5, notes: 'Drone aerial flight permitted pending wind check' },
+      { id: 'v-2', name: 'Artisan Vineyard Table Catering', category: 'catering', contactPerson: 'Chef Mateo Rossi', phone: '(707) 555-8314', email: 'mateo@vineyardtable.com', cost: 7800, status: 'booked', rating: 5, notes: 'Special gluten-free and vegan plates arranged', quotes: [
+        { id: 'q-w2a', company: 'Artisan Vineyard Table Catering', amount: 7800, date: '2026-08-28', inclusions: 'Plated farm-to-table dinner for 120, two wine pours per guest, service staff', notes: 'Menu tasting already completed.', source: 'sample' },
+        { id: 'q-w2b', company: 'Golden Harvest Catering Co.', amount: 8600, date: '2026-08-30', inclusions: 'Family-style dinner for 120, limited bar, cake cutting', notes: 'Extra fee for late-night snack station.', source: 'sample' },
+      ] },
+      { id: 'v-3', name: 'Lumiere Fine Art Wedding Studios', category: 'photography', contactPerson: 'Elena Rostova', phone: '(415) 555-7721', email: 'contact@lumiereart.com', cost: 4200, status: 'deposit_paid', rating: 5, notes: 'Drone aerial flight permitted pending wind check', quotes: [
+        { id: 'q-w3a', company: 'Lumiere Fine Art Wedding Studios', amount: 4200, date: '2026-08-18', inclusions: '9-hour coverage, second shooter, 4K video, drone aerials, 400 edited photos', notes: 'Travel within Napa included.', source: 'sample' },
+        { id: 'q-w3b', company: 'Aperture & Oak Studio', amount: 4650, date: '2026-08-22', inclusions: '10-hour coverage, engagement mini-session, 600 photos', notes: 'No drone capability.', source: 'sample' },
+      ] },
       { id: 'v-4', name: 'Botanica Flora Studio', category: 'decoration', contactPerson: 'Chloe Chen', phone: '(707) 555-4920', email: 'chloe@botanicaflora.com', cost: 3150, status: 'booked', rating: 4, notes: 'Installation begins at 12:30 PM' },
       { id: 'v-5', name: 'Golden State Sound & String Quartet', category: 'entertainment', contactPerson: 'Julian Vance', phone: '(510) 555-9018', email: 'julian@goldenstatesound.com', cost: 2600, status: 'booked', rating: 5, notes: 'Requires two power outlets near ceremony lawn' },
       { id: 'v-6', name: 'Sweet Heritage Custom Patisserie', category: 'cake', contactPerson: 'Amara Bell', phone: '(707) 555-3211', email: 'amara@sweetheritage.com', cost: 720, status: 'deposit_paid', rating: 5, notes: 'Delivery scheduled for 3:00 PM before heat peaks' },
@@ -278,6 +284,24 @@ export const INITIAL_EVENTS = [
       { id: 'run-w12', time: '22:30', durationMin: 60, activity: 'Teardown & vendor load-out', owner: 'Venue Team', notes: 'Walk the meadow against the winery checklist.', done: false, source: 'sample' },
     ],
     agentRuns: [],
+    gifts: [
+      { id: 'gift-w1', name: 'Handcrafted Olive Wood Serving Board', store: 'Napa Home Atelier', url: '', price: 85, priority: 'high', status: 'claimed', claimedByName: 'Eleanor Vance', claimedByGuestId: 'guest-w1', notes: 'Engraved with the wedding monogram.' },
+      { id: 'gift-w2', name: 'Crystal Wine Decanter & Vineyard Glass Set', store: 'Glasshouse Registry', url: '', price: 145, priority: 'high', status: 'purchased', claimedByName: 'Marco Rossi', claimedByGuestId: 'guest-w2', notes: 'Shipped from Milan.' },
+      { id: 'gift-w3', name: 'Stand Mixer in Matte Sage', store: 'Culinary Depot', url: 'https://example.com/stand-mixer-sage', price: 380, priority: 'medium', status: 'available', claimedByName: '', claimedByGuestId: '', notes: 'For the pasta-making nights.' },
+      { id: 'gift-w4', name: 'Weekend Vineyard Getaway Voucher', store: 'Vista Estates', url: '', price: 250, priority: 'medium', status: 'claimed', claimedByName: 'Hannah & Tom Whitfield', claimedByGuestId: 'guest-w6', notes: 'Valid for the off-season harvest weekends.' },
+      { id: 'gift-w5', name: 'Espresso Machine with Milk Frother', store: 'Brew & Bean Co.', url: '', price: 420, priority: 'low', status: 'available', claimedByName: '', claimedByGuestId: '', notes: '' },
+      { id: 'gift-w6', name: 'Wax-Seal Stationery & Calligraphy Kit', store: 'Paper & Post', url: '', price: 65, priority: 'low', status: 'available', claimedByName: '', claimedByGuestId: '', notes: '' },
+    ],
+    moodboard: {
+      tiles: [
+        { id: 'tile-w1', type: 'color', value: '#c46851', caption: 'Terracotta' },
+        { id: 'tile-w2', type: 'color', value: '#7a8b7b', caption: 'Olive Leaf' },
+        { id: 'tile-w3', type: 'color', value: '#e8d5b5', caption: 'Warm Sand' },
+        { id: 'tile-w4', type: 'color', value: '#4a3b32', caption: 'Espresso Wood' },
+        { id: 'tile-w5', type: 'note', value: 'Festoon string lights with amber Edison bulbs', caption: 'Lighting' },
+        { id: 'tile-w6', type: 'note', value: 'Seeded eucalyptus & white ranunculus runners', caption: 'Florals' },
+      ],
+    },
   },
   {
     id: 'event-bday-02',
@@ -310,7 +334,11 @@ export const INITIAL_EVENTS = [
     vendors: [
       { id: 'v-b1', name: 'Velvet Sky Rooftop', category: 'venue', contactPerson: 'Jordan Lee', phone: '(555) 018-4422', email: 'events@velvetsky.com', cost: 2400, status: 'booked', rating: 5, notes: 'Private bartender included' },
       { id: 'v-b2', name: 'RetroCade Game Rentals', category: 'entertainment', contactPerson: 'Samir Patel', phone: '(555) 019-3388', email: 'sam@retrocade.io', cost: 650, status: 'booked', rating: 5, notes: 'Delivery at 5pm' },
-      { id: 'v-b3', name: 'DJ SynthWave Pulse', category: 'entertainment', contactPerson: 'Alex Rivera', phone: '(555) 012-7711', email: 'djpulse@beats.com', cost: 750, status: 'quote_received', rating: 5, notes: 'Awaiting contract sign-off' },
+      { id: 'v-b3', name: 'DJ SynthWave Pulse', category: 'entertainment', contactPerson: 'Alex Rivera', phone: '(555) 012-7711', email: 'djpulse@beats.com', cost: 750, status: 'quote_received', rating: 5, notes: 'Awaiting contract sign-off', quotes: [
+        { id: 'q-b3a', company: 'DJ SynthWave Pulse', amount: 750, date: '2026-10-10', inclusions: '3-hour live retrowave set, laser rig, requests line', notes: 'Holds the date for 2 weeks.', source: 'sample' },
+        { id: 'q-b3b', company: 'Neon Nights DJ Collective', amount: 690, date: '2026-10-12', inclusions: '3-hour set, basic uplights, MC hosting', notes: 'No laser rig — brings mirror ball instead.', source: 'sample' },
+        { id: 'q-b3c', company: 'Retrowave Sound Co.', amount: 820, date: '2026-10-14', inclusions: '4-hour set, laser + fog machine, custom edit drops', notes: 'Includes a 30-minute arcade-game remix block.', source: 'sample' },
+      ] },
     ],
     guests: [
       { id: 'guest-b1', name: 'Jonas & Mira Weber', email: 'jonas.weber@email.com', phone: '(555) 201-3344', group: 'friends', rsvp: 'attending', plusOnes: 1, meal: 'standard', notes: 'Bringing retro board games for the arcade corner.' },
@@ -356,6 +384,20 @@ export const INITIAL_EVENTS = [
       { id: 'run-b11', time: '23:45', durationMin: 60, activity: 'Teardown & arcade load-out', owner: 'Venue Team', notes: 'Cabinets down by 00:45 per building rules.', done: false, source: 'sample' },
     ],
     agentRuns: [],
+    gifts: [
+      { id: 'gift-b1', name: 'Retro Handheld Game Console (300-in-1)', store: 'PixelHaus Imports', url: '', price: 95, priority: 'high', status: 'claimed', claimedByName: 'Aisha Thompson', claimedByGuestId: 'guest-b2', notes: 'Golden edition with the backlit screen.' },
+      { id: 'gift-b2', name: 'Limited-Edition Synthwave Vinyl Box Set', store: 'Waveform Records', url: '', price: 120, priority: 'medium', status: 'available', claimedByName: '', claimedByGuestId: '', notes: 'Neon splatter pressing.' },
+      { id: 'gift-b3', name: 'Custom Neon Bar Sign (Personalized)', store: 'GlowCraft Studio', url: '', price: 180, priority: 'low', status: 'available', claimedByName: '', claimedByGuestId: '', notes: 'For the home arcade corner.' },
+    ],
+    moodboard: {
+      tiles: [
+        { id: 'tile-b1', type: 'color', value: '#f43f5e', caption: 'Laser Pink' },
+        { id: 'tile-b2', type: 'color', value: '#06b6d4', caption: 'Cyber Cyan' },
+        { id: 'tile-b3', type: 'color', value: '#8b5cf6', caption: 'Neon Purple' },
+        { id: 'tile-b4', type: 'color', value: '#0f172a', caption: 'Synth Black' },
+        { id: 'tile-b5', type: 'note', value: 'UV blacklight photo corner with shutter-shade props', caption: 'Photos' },
+      ],
+    },
   },
   {
     id: 'event-comm-03',
@@ -383,7 +425,10 @@ export const INITIAL_EVENTS = [
       { id: 'task-c3', title: 'Book portable restrooms & wash stations', phase: 'mid', category: 'venue', dueDate: '2027-01-15', priority: 'high', completed: false, notes: 'Quotes received from 2 vendors' },
     ],
     vendors: [
-      { id: 'v-c1', name: 'Valley Event Rentals', category: 'rentals', contactPerson: 'Dave Miller', phone: '(555) 332-9011', email: 'dave@valleyrentals.com', cost: 2100, status: 'quote_received', rating: 4, notes: 'Setup morning of event at 7am' },
+      { id: 'v-c1', name: 'Valley Event Rentals', category: 'rentals', contactPerson: 'Dave Miller', phone: '(555) 332-9011', email: 'dave@valleyrentals.com', cost: 2100, status: 'quote_received', rating: 4, notes: 'Setup morning of event at 7am', quotes: [
+        { id: 'q-c1a', company: 'Valley Event Rentals', amount: 2100, date: '2026-11-20', inclusions: '20 pop-up tents + 40 folding tables, delivery and pickup', notes: 'Green-certified cleaning between uses.', source: 'sample' },
+        { id: 'q-c1b', company: 'Meadow & Marquee Co.', amount: 2350, date: '2026-11-22', inclusions: '18 tents + 45 tables, onsite attendant, pickup', notes: 'Attendant stays through teardown.', source: 'sample' },
+      ] },
     ],
     guests: [
       { id: 'guest-c1', name: 'Mayor Alicia Fuentes', email: 'mayor@oakridge.gov', phone: '(555) 411-0001', group: 'vip', rsvp: 'attending', plusOnes: 1, meal: 'standard', notes: 'Opening the fair at 10:00 AM — ribbon cutting at the main gate.' },
@@ -413,5 +458,18 @@ export const INITIAL_EVENTS = [
       { id: 'run-c10', time: '16:30', durationMin: 90, activity: 'Teardown & meadow restoration check', owner: 'Venue Team', notes: 'Ranger signs off before trucks leave.', done: false, source: 'sample' },
     ],
     agentRuns: [],
+    gifts: [
+      { id: 'gift-c1', name: 'Compostable Serve Ware Set (300 guests)', store: 'GreenLeaf Co-op', url: '', price: 260, priority: 'high', status: 'available', claimedByName: '', claimedByGuestId: '', notes: 'Plant-fiber plates, cups and cutlery for the food lane.' },
+      { id: 'gift-c2', name: 'Meadow Restoration Tool Kit', store: 'Oakridge Garden Center', url: '', price: 140, priority: 'medium', status: 'claimed', claimedByName: 'GreenLeaf Co-op Artisans', claimedByGuestId: 'guest-c3', notes: 'For the post-fair meadow repair morning.' },
+    ],
+    moodboard: {
+      tiles: [
+        { id: 'tile-c1', type: 'color', value: '#10b981', caption: 'Leaf Green' },
+        { id: 'tile-c2', type: 'color', value: '#059669', caption: 'Forest Pine' },
+        { id: 'tile-c3', type: 'color', value: '#fbbf24', caption: 'Solar Gold' },
+        { id: 'tile-c4', type: 'color', value: '#0284c7', caption: 'Fresh Sky' },
+        { id: 'tile-c5', type: 'note', value: 'Upcycled fabric bunting between the booth lanes', caption: 'Decor' },
+      ],
+    },
   }
 ];

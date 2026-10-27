@@ -4,9 +4,10 @@ import { useEventContext } from '../../context/EventContext';
 import { BUDGET_CATEGORIES } from '../../data/defaultData';
 import { calculateBudgetTotals } from '../../utils/calculator';
 import { aiAssist } from '../../services/aiAssist';
+import { formatCurrency } from '../../utils/formatters';
 import { AiButton, AiCard, AiErrorNote, AiSkeleton, AiSourceNote, mapCategoryToFallback, useAiRequest } from './aiKit';
 
-const money = (n) => `$${Math.round(n).toLocaleString('en-US')}`;
+const money = (n) => formatCurrency(n);
 
 /**
  * AI Budget Copilot — smart allocation plan + savings tips for the active

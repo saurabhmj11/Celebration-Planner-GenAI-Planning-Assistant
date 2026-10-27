@@ -26,18 +26,20 @@ import {
 /** Max results shown per group once a query is typed. */
 export const GROUP_RESULT_CAP = 6;
 
-/** Navigation entries — mirrors the 11 navbar tabs. */
+/** Navigation entries — mirrors the 13 navbar tabs. */
 export const PALETTE_NAV_ITEMS = [
   { id: 'nav-dashboard', group: 'Go to', label: 'Dashboard', keywords: 'home overview stats countdown progress', tab: 'dashboard' },
   { id: 'nav-force', group: 'Go to', label: 'Agent Force', keywords: 'agents ai workforce run status budget guard', tab: 'force' },
   { id: 'nav-budget', group: 'Go to', label: 'Budget Planner', keywords: 'budget expenses money spend allocated paid', tab: 'budget' },
   { id: 'nav-timeline', group: 'Go to', label: 'Timeline & Tasks', keywords: 'timeline tasks milestones checklist due', tab: 'timeline' },
   { id: 'nav-guests', group: 'Go to', label: 'Guests & RSVPs', keywords: 'guests rsvps invitations headcount meal plus one', tab: 'guests' },
+  { id: 'nav-gifts', group: 'Go to', label: 'Gift Registry', keywords: 'gifts registry wish list claim presents', tab: 'gifts' },
   { id: 'nav-dayof', group: 'Go to', label: 'Day-Of Workbench', keywords: 'day of run sheet seating chart payment ledger schedule', tab: 'dayof' },
   { id: 'nav-photos', group: 'Go to', label: 'Photo Memory Wall', keywords: 'photos album pictures memories gallery', tab: 'photos' },
   { id: 'nav-venues', group: 'Go to', label: 'AI Venue Finder', keywords: 'venues venue finder location map recommendations', tab: 'venues' },
-  { id: 'nav-vendors', group: 'Go to', label: 'Vendor Checklist', keywords: 'vendors suppliers contacts booked quotes', tab: 'vendors' },
+  { id: 'nav-vendors', group: 'Go to', label: 'Vendor Checklist', keywords: 'vendors suppliers contacts booked quotes compare', tab: 'vendors' },
   { id: 'nav-ai', group: 'Go to', label: 'AI Theme Studio', keywords: 'ai studio theme ideas palette decor music', tab: 'ai' },
+  { id: 'nav-mood', group: 'Go to', label: 'Mood Board', keywords: 'mood board inspiration colors swatches imagery vibe', tab: 'mood' },
   { id: 'nav-print', group: 'Go to', label: 'Print Summary', keywords: 'print summary export master plan pdf', tab: 'print' },
 ].map((item) => ({
   ...item,
@@ -57,14 +59,40 @@ const rsvpShortOf = (id) => {
 /**
  * Quick actions. `resolvedTheme` ('light' | 'dark' | undefined) switches the
  * theme action's label so it always describes what the click will DO.
+ * `canUndo` / `canRedo` annotate the history actions; `currencyCode` shows
+ * the active display currency in the currency action's hint.
  */
-export function buildActionItems({ resolvedTheme } = {}) {
+export function buildActionItems({ resolvedTheme, canUndo = false, canRedo = false, currencyCode = 'USD' } = {}) {
   const toDark = resolvedTheme !== 'dark';
   return [
     { id: 'act-new-event', group: 'Actions', label: 'New Celebration', keywords: 'new event create add celebration party', action: { type: 'newEvent' } },
     { id: 'act-add-expense', group: 'Actions', label: 'Add Expense', keywords: 'new expense budget cost add', action: { type: 'addExpense' } },
     { id: 'act-add-task', group: 'Actions', label: 'Add Task', keywords: 'new task todo milestone add', action: { type: 'addTask' } },
     { id: 'act-add-vendor', group: 'Actions', label: 'Add Vendor', keywords: 'new vendor supplier contact add', action: { type: 'addVendor' } },
+    {
+      id: 'act-undo',
+      group: 'Actions',
+      label: 'Undo Last Change',
+      hint: canUndo ? 'Ctrl+Z — revert your latest edit' : 'Nothing to undo yet',
+      keywords: 'undo revert back history last change ctrl z',
+      action: { type: 'undo' },
+    },
+    {
+      id: 'act-redo',
+      group: 'Actions',
+      label: 'Redo Change',
+      hint: canRedo ? 'Ctrl+Shift+Z — restore what you undid' : 'Nothing to redo yet',
+      keywords: 'redo repeat restore forward redo change ctrl shift z y',
+      action: { type: 'redo' },
+    },
+    {
+      id: 'act-currency',
+      group: 'Actions',
+      label: 'Display Currency',
+      hint: `Currently showing ${currencyCode} — change symbol & conversion`,
+      keywords: 'currency money display symbol euros pounds rupees yen conversion exchange rate',
+      action: { type: 'currency' },
+    },
     {
       id: 'act-toggle-theme',
       group: 'Actions',

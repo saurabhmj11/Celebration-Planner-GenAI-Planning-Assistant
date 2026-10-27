@@ -11,6 +11,7 @@ import {
   MapPinned,
   Users,
   UsersRound,
+  Gift,
   Images,
   Printer,
   Key,
@@ -24,6 +25,10 @@ import {
   Bot,
   CalendarClock,
   Search,
+  Palette,
+  Undo2,
+  Redo2,
+  Coins,
 } from 'lucide-react';
 import { formatShortDate, formatCurrency } from '../../utils/formatters';
 import { useCelebrationMood } from '../../hooks/useCelebrationMood';
@@ -41,7 +46,7 @@ import { ThemeToggle } from './ThemeToggle';
  * strip on top of the event switcher — ghost text through the translucent trigger and
  * clicks landing on the wrong control. A second row guarantees separation at any width.
  */
-export const Navbar = ({ currentTab, setCurrentTab, onOpenNewEvent, onOpenApiKey, onEditCurrentEvent, onOpenPalette }) => {
+export const Navbar = ({ currentTab, setCurrentTab, onOpenNewEvent, onOpenApiKey, onEditCurrentEvent, onOpenPalette, onOpenCurrency }) => {
   const {
     events,
     activeEventId,
@@ -52,6 +57,10 @@ export const Navbar = ({ currentTab, setCurrentTab, onOpenNewEvent, onOpenApiKey
     resetAllToSampleData,
     exportEventsData,
     apiKey,
+    historyMeta,
+    undo,
+    redo,
+    currencyConfig,
   } = useEventContext();
 
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
@@ -72,11 +81,13 @@ export const Navbar = ({ currentTab, setCurrentTab, onOpenNewEvent, onOpenApiKey
     { id: 'budget', label: 'Budget', icon: Wallet, ariaLabel: 'Budget Planner' },
     { id: 'timeline', label: 'Timeline', icon: Clock, ariaLabel: 'Timeline & Tasks' },
     { id: 'guests', label: 'Guests', icon: UsersRound, ariaLabel: 'Guests & RSVPs — invitations, replies and headcount', highlight: true },
+    { id: 'gifts', label: 'Gifts', icon: Gift, ariaLabel: 'Gift Registry — wish list, guest claims, purchases', highlight: true },
     { id: 'dayof', label: 'Day-Of', icon: CalendarClock, ariaLabel: 'Day-Of Workbench — run sheet, seating chart, payment ledger', highlight: true },
     { id: 'photos', label: 'Photos', icon: Images, ariaLabel: 'Photo Memory Wall — share celebration moments' },
     { id: 'venues', label: 'Venues', icon: MapPinned, ariaLabel: 'AI Venue Finder', highlight: true },
-    { id: 'vendors', label: 'Vendors', icon: Users, ariaLabel: 'Vendor Checklist' },
+    { id: 'vendors', label: 'Vendors', icon: Users, ariaLabel: 'Vendor Checklist — contacts, quotes, comparison' },
     { id: 'ai', label: 'AI Studio', icon: Sparkles, ariaLabel: 'AI Theme Studio', highlight: true },
+    { id: 'mood', label: 'Mood', icon: Palette, ariaLabel: 'Mood Board — colors, imagery and vibe inspiration' },
     { id: 'print', label: 'Print', icon: Printer, ariaLabel: 'Summary Sheet' },
   ];
 
@@ -405,6 +416,45 @@ export const Navbar = ({ currentTab, setCurrentTab, onOpenNewEvent, onOpenApiKey
               </kbd>
             </button>
 
+            {/* Undo / Redo — global history (Ctrl+Z / Ctrl+Shift+Z) */}
+            <div className="flex items-center rounded-xl border border-slate-200 bg-white overflow-hidden" role="group" aria-label="Undo and redo">
+              <button
+                type="button"
+                onClick={undo}
+                disabled={!historyMeta.canUndo}
+                title={historyMeta.canUndo ? 'Undo your last change (Ctrl+Z)' : 'Nothing to undo yet'}
+                aria-label="Undo last change"
+                aria-keyshortcuts="Control+Z Meta+Z"
+                className="h-9 w-9 flex items-center justify-center text-slate-600 hover:text-brand-700 hover:bg-slate-100 disabled:opacity-40 disabled:hover:bg-white disabled:cursor-not-allowed transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+              >
+                <Undo2 className="w-4 h-4" aria-hidden="true" />
+              </button>
+              <span className="w-px h-5 bg-slate-200" aria-hidden="true" />
+              <button
+                type="button"
+                onClick={redo}
+                disabled={!historyMeta.canRedo}
+                title={historyMeta.canRedo ? 'Redo the change you undid (Ctrl+Shift+Z)' : 'Nothing to redo'}
+                aria-label="Redo change"
+                aria-keyshortcuts="Control+Shift+Z Meta+Shift+Z Control+Y Meta+Y"
+                className="h-9 w-9 flex items-center justify-center text-slate-600 hover:text-brand-700 hover:bg-slate-100 disabled:opacity-40 disabled:hover:bg-white disabled:cursor-not-allowed transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+              >
+                <Redo2 className="w-4 h-4" aria-hidden="true" />
+              </button>
+            </div>
+
+            {/* Display currency — shows the active code */}
+            <button
+              type="button"
+              onClick={onOpenCurrency}
+              title={`Display currency: ${currencyConfig.code} — change how money is shown`}
+              aria-label={`Display currency settings — currently ${currencyConfig.code}`}
+              className="flex items-center gap-1.5 h-9 px-2.5 rounded-xl text-xs font-bold text-slate-600 hover:text-slate-900 hover:bg-slate-100 border border-slate-200 bg-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+            >
+              <Coins className="w-3.5 h-3.5 text-emerald-600" aria-hidden="true" />
+              <span>{currencyConfig.code}</span>
+            </button>
+
             {/* AI Engine Status */}
             <button
               type="button"
@@ -477,7 +527,7 @@ export const Navbar = ({ currentTab, setCurrentTab, onOpenNewEvent, onOpenApiKey
       <div className="hidden lg:block border-t border-slate-100 bg-white/60">
         <nav
           aria-label="Main Navigation"
-          className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center gap-1 xl:gap-1.5 h-12"
+          className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center gap-1 xl:gap-1.5 h-12 overflow-x-auto custom-scrollbar"
         >
           {navItems.map((item) => {
             const Icon = item.icon;
@@ -491,7 +541,7 @@ export const Navbar = ({ currentTab, setCurrentTab, onOpenNewEvent, onOpenApiKey
                 aria-label={item.ariaLabel || item.label}
                 title={item.ariaLabel || item.label}
                 style={isActive ? { backgroundColor: mood.accent } : undefined}
-                className={`flex items-center gap-1.5 xl:gap-2 h-9 px-2 xl:px-3 rounded-xl text-xs font-bold whitespace-nowrap transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 ${
+                className={`flex items-center gap-1.5 xl:gap-2 h-9 px-2 xl:px-3 rounded-xl text-xs font-bold whitespace-nowrap shrink-0 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 ${
                   isActive
                     ? 'text-white shadow-md'
                     : item.highlight

@@ -5,6 +5,11 @@ import { INITIAL_EVENTS } from '../data/defaultData';
 import { makeId, sanitizeEvents } from '../utils/ids';
 import { MAX_PHOTOS_PER_EVENT, validatePhotoDataUrl } from '../lib/photos/photoModel';
 import { seatWeight } from '../lib/planning/seating';
+import { recordEdit, computeUndo, computeRedo, summarizeHistory } from '../lib/history/historyStack';
+import { normalizeGift, claimGift } from '../lib/gifts/giftModel';
+import { normalizeQuote, acceptQuoteFields, MAX_QUOTES_PER_VENDOR } from '../lib/vendors/quoteModel';
+import { MAX_TILES } from '../lib/moodboard/moodModel';
+import { setCurrencyConfig as applyCurrencySingleton, formatMoney } from '../lib/currency/currencyModel';
 
 const EventContext = createContext(null);
 
@@ -15,6 +20,13 @@ export const EventProvider = ({ children }) => {
   const [events, setEvents] = useState(() => sanitizeEvents(storageService.getEvents()));
   const [activeEventId, setActiveEventIdState] = useState(() => storageService.getActiveEventId());
   const [apiKey, setApiKeyState] = useState(() => storageService.getApiKey());
+  // Display currency — hydrated into the formatters singleton BEFORE children
+  // render, so every formatCurrency() call is already currency-aware.
+  const [currencyConfig, setCurrencyConfigState] = useState(() => {
+    const stored = storageService.getCurrency();
+    applyCurrencySingleton(stored);
+    return stored;
+  });
   const [toast, setToast] = useState(null);
   const quotaWarnedRef = useRef(false);
 
@@ -84,6 +96,82 @@ export const EventProvider = ({ children }) => {
     }
   }, [events, activeEventId]);
 
+  // ---------------- UNDO / REDO HISTORY ----------------
+  // Snapshot-based: state updates never mutate, so storing the previous
+  // `events` array reference is a complete, O(1) undo point. One effect
+  // covers every action (all ~45 of them funnel through setEvents) without
+  // touching a single one. History navigation sets a skip flag so restoring
+  // a snapshot is not itself recorded as a brand-new edit.
+  const undoStackRef = useRef([]);
+  const redoStackRef = useRef([]);
+  const historySkipRef = useRef(false);
+  const prevEventsRef = useRef(events); // last committed value
+  const [historyMeta, setHistoryMeta] = useState({ canUndo: false, canRedo: false });
+
+  useEffect(() => {
+    const before = prevEventsRef.current;
+    if (before === events) return; // no change (also makes StrictMode re-runs inert)
+    prevEventsRef.current = events;
+    if (historySkipRef.current) {
+      historySkipRef.current = false; // we just navigated history — not an edit
+    } else {
+      const next = recordEdit(
+        { undoStack: undoStackRef.current, redoStack: redoStackRef.current },
+        before
+      );
+      undoStackRef.current = next.undoStack;
+      redoStackRef.current = next.redoStack;
+    }
+    setHistoryMeta(
+      summarizeHistory({ undoStack: undoStackRef.current, redoStack: redoStackRef.current })
+    );
+  }, [events]);
+
+  const undo = useCallback(() => {
+    const step = computeUndo(
+      { undoStack: undoStackRef.current, redoStack: redoStackRef.current },
+      events
+    );
+    if (!step) {
+      showToast('Nothing to undo yet — make a change first.', 'info');
+      return;
+    }
+    undoStackRef.current = step.undoStack;
+    redoStackRef.current = step.redoStack;
+    historySkipRef.current = true;
+    setEvents(step.next);
+    setHistoryMeta(summarizeHistory({ undoStack: step.undoStack, redoStack: step.redoStack }));
+    showToast('Undid your last change.', 'info');
+  }, [events, showToast]);
+
+  const redo = useCallback(() => {
+    const step = computeRedo(
+      { undoStack: undoStackRef.current, redoStack: redoStackRef.current },
+      events
+    );
+    if (!step) {
+      showToast('Nothing to redo — your history is up to date.', 'info');
+      return;
+    }
+    undoStackRef.current = step.undoStack;
+    redoStackRef.current = step.redoStack;
+    historySkipRef.current = true;
+    setEvents(step.next);
+    setHistoryMeta(summarizeHistory({ undoStack: step.undoStack, redoStack: step.redoStack }));
+    showToast('Redid the change.', 'info');
+  }, [events, showToast]);
+
+  // ---------------- DISPLAY CURRENCY ----------------
+  const setDisplayCurrency = useCallback(
+    (config) => {
+      const normalized = storageService.saveCurrency(config);
+      applyCurrencySingleton(normalized);
+      setCurrencyConfigState(normalized);
+      showToast(`Money now displays in ${normalized.code}.`, 'success');
+    },
+    [showToast]
+  );
+
   // ---------------- EVENT ACTIONS ----------------
   const addEvent = useCallback((eventData) => {
     const newId = makeId('event');
@@ -101,6 +189,8 @@ export const EventProvider = ({ children }) => {
       payments: eventData.payments || [],
       runSheet: eventData.runSheet || [],
       agentRuns: [],
+      gifts: eventData.gifts || [],
+      moodboard: { tiles: eventData.moodboard?.tiles || [] },
       budget: Number(eventData.budget) || 5000,
       guestCount: Number(eventData.guestCount) || 50,
     };
@@ -155,8 +245,18 @@ export const EventProvider = ({ children }) => {
       createdAt: new Date().toISOString(),
       expenses: source.expenses ? source.expenses.map((exp) => ({ ...exp, id: makeId('exp') })) : [],
       tasks: source.tasks ? source.tasks.map((t) => ({ ...t, id: makeId('task'), completed: false })) : [],
-      vendors: source.vendors ? source.vendors.map((v) => ({ ...v, id: makeId('v') })) : [],
+      vendors: source.vendors
+        ? source.vendors.map((v) => ({
+            ...v,
+            id: makeId('v'),
+            quotes: (v.quotes || []).map((q) => ({ ...q, id: makeId('quote') })),
+          }))
+        : [],
       guests: (source.guests || []).map((g) => ({ ...g, id: guestIdMap.get(g.id) || makeId('guest') })),
+      gifts: (source.gifts || []).map((g) => ({ ...g, id: makeId('gift') })),
+      moodboard: {
+        tiles: (source.moodboard?.tiles || []).map((t) => ({ ...t, id: makeId('tile') })),
+      },
       invitation: source.invitation ? { ...source.invitation } : null,
       photos: (source.photos || []).map((p) => ({ ...p, id: makeId('photo') })),
       seating: {
@@ -476,6 +576,202 @@ export const EventProvider = ({ children }) => {
     );
     showToast(`Vendor status updated to ${status}!`, 'info');
   }, [activeEvent, showToast]);
+
+  // ---------------- VENDOR QUOTE ACTIONS ----------------
+  // Quotes live inside their vendor (comparison across vendors happens in
+  // buildCategoryComparison); the per-vendor cap guards storage health.
+
+  const addVendorQuote = useCallback(
+    (vendorId, quoteData) => {
+      if (!activeEvent) return false;
+      const quote = normalizeQuote(quoteData);
+      if (!quote) {
+        showToast('Quotes need a valid amount.', 'info');
+        return false;
+      }
+      const finalQuote = { ...quote, id: quote.id || makeId('quote') };
+      setEvents((prev) =>
+        prev.map((e) => {
+          if (e.id !== activeEvent.id) return e;
+          return {
+            ...e,
+            vendors: (e.vendors || []).map((v) => {
+              if (v.id !== vendorId) return v;
+              const quotes = [...(v.quotes || []), finalQuote];
+              return {
+                ...v,
+                quotes: quotes.length > MAX_QUOTES_PER_VENDOR ? quotes.slice(1) : quotes,
+              };
+            }),
+          };
+        })
+      );
+      showToast(`Quote from "${finalQuote.company}" added (${formatMoney(finalQuote.amount)}).`, 'success');
+      return true;
+    },
+    [activeEvent, showToast]
+  );
+
+  const deleteVendorQuote = useCallback(
+    (vendorId, quoteId) => {
+      if (!activeEvent) return;
+      setEvents((prev) =>
+        prev.map((e) => {
+          if (e.id !== activeEvent.id) return e;
+          return {
+            ...e,
+            vendors: (e.vendors || []).map((v) =>
+              v.id === vendorId ? { ...v, quotes: (v.quotes || []).filter((q) => q.id !== quoteId) } : v
+            ),
+          };
+        })
+      );
+      showToast('Quote removed.', 'info');
+    },
+    [activeEvent, showToast]
+  );
+
+  /**
+   * Accept a quote: syncs the vendor's cost to the quote amount, flips the
+   * vendor to booked, and prepends an audit line to the vendor notes.
+   */
+  const acceptVendorQuote = useCallback(
+    (vendorId, quoteId) => {
+      if (!activeEvent) return;
+      const vendor = (activeEvent.vendors || []).find((v) => v.id === vendorId);
+      const quote = (vendor?.quotes || []).find((q) => q.id === quoteId);
+      const fields = vendor && quote ? acceptQuoteFields(vendor, quote) : null;
+      if (!fields) {
+        showToast('Could not accept that quote.', 'error');
+        return;
+      }
+      setEvents((prev) =>
+        prev.map((e) => {
+          if (e.id !== activeEvent.id) return e;
+          return {
+            ...e,
+            vendors: (e.vendors || []).map((v) => (v.id === vendorId ? { ...v, ...fields } : v)),
+          };
+        })
+      );
+      showToast(
+        `Accepted "${quote.company || vendor.name}" at ${formatMoney(fields.cost)} — vendor booked.`,
+        'success'
+      );
+    },
+    [activeEvent, showToast]
+  );
+
+  // ---------------- GIFT REGISTRY ACTIONS ----------------
+
+  /** Normalize + id-mint a gift record; null when the name is missing. */
+  const normalizeGiftRecord = useCallback((raw) => {
+    const normalized = normalizeGift(raw);
+    return normalized ? { ...normalized, id: normalized.id || makeId('gift') } : null;
+  }, []);
+
+  const addGift = useCallback(
+    (giftData) => {
+      if (!activeEvent) return false;
+      const gift = normalizeGiftRecord(giftData);
+      if (!gift) {
+        showToast('Give the registry item a name first.', 'info');
+        return false;
+      }
+      setEvents((prev) =>
+        prev.map((e) => (e.id === activeEvent.id ? { ...e, gifts: [gift, ...(e.gifts || [])] } : e))
+      );
+      showToast(`Added "${gift.name}" to the registry!`, 'success');
+      return true;
+    },
+    [activeEvent, normalizeGiftRecord, showToast]
+  );
+
+  const updateGift = useCallback(
+    (giftId, fields) => {
+      if (!activeEvent) return;
+      setEvents((prev) =>
+        prev.map((e) => {
+          if (e.id !== activeEvent.id) return e;
+          return {
+            ...e,
+            gifts: (e.gifts || []).map((g) => {
+              if (g.id !== giftId) return g;
+              const merged = normalizeGift({ ...g, ...fields });
+              // A field wipe that kills the name is ignored — keep the original.
+              return merged ? { ...merged, id: g.id } : g;
+            }),
+          };
+        })
+      );
+      showToast('Registry item updated.', 'success');
+    },
+    [activeEvent, showToast]
+  );
+
+  const deleteGift = useCallback(
+    (giftId) => {
+      if (!activeEvent) return;
+      setEvents((prev) =>
+        prev.map((e) =>
+          e.id === activeEvent.id ? { ...e, gifts: (e.gifts || []).filter((g) => g.id !== giftId) } : e
+        )
+      );
+      showToast('Registry item removed.', 'info');
+    },
+    [activeEvent, showToast]
+  );
+
+  /**
+   * Claim a gift for a guest ({ id, name }) or release it (guest === null).
+   * The name is snapshotted so deleting the guest later never corrupts rows.
+   */
+  const claimGiftForGuest = useCallback(
+    (giftId, guest) => {
+      if (!activeEvent) return;
+      setEvents((prev) =>
+        prev.map((e) => {
+          if (e.id !== activeEvent.id) return e;
+          return {
+            ...e,
+            gifts: (e.gifts || []).map((g) => {
+              if (g.id !== giftId) return g;
+              if (!guest) {
+                return g.status === 'purchased' ? g : { ...g, status: 'available', claimedByGuestId: '', claimedByName: '' };
+              }
+              const claimed = claimGift(g, { guestId: guest.id, guestName: guest.name });
+              return claimed === g ? g : { ...claimed, id: g.id };
+            }),
+          };
+        })
+      );
+      if (guest) {
+        showToast(`${guest.name} claimed this gift.`, 'success');
+      } else {
+        showToast('Claim released — the gift is available again.', 'info');
+      }
+    },
+    [activeEvent, showToast]
+  );
+
+  // ---------------- MOOD BOARD ACTIONS ----------------
+  // The board is one ordered tile array; the pure module validates each tile
+  // (strict hex, http(s)-only image URLs, note caps) before it ever lands.
+
+  const setMoodTiles = useCallback(
+    (tiles) => {
+      if (!activeEvent || !Array.isArray(tiles) || tiles.length > MAX_TILES) return false;
+      setEvents((prev) =>
+        prev.map((e) => {
+          if (e.id !== activeEvent.id) return e;
+          const board = { ...(e.moodboard || {}), tiles };
+          return { ...e, moodboard: board };
+        })
+      );
+      return true;
+    },
+    [activeEvent]
+  );
 
   // ---------------- GUEST & RSVP ACTIONS ----------------
   // updateGuest stays silent on purpose: inline RSVP/plus-one/meal selects
@@ -1119,6 +1415,13 @@ export const EventProvider = ({ children }) => {
       toast,
       showToast,
       triggerConfetti,
+      // Undo / redo history
+      historyMeta,
+      undo,
+      redo,
+      // Display currency
+      currencyConfig,
+      setDisplayCurrency,
       // Event CRUD
       addEvent,
       updateEvent,
@@ -1143,6 +1446,17 @@ export const EventProvider = ({ children }) => {
       updateVendor,
       deleteVendor,
       updateVendorStatus,
+      // Vendor quotes
+      addVendorQuote,
+      deleteVendorQuote,
+      acceptVendorQuote,
+      // Gift registry
+      addGift,
+      updateGift,
+      deleteGift,
+      claimGiftForGuest,
+      // Mood board
+      setMoodTiles,
       // Guest & RSVP CRUD
       addGuest,
       addGuests,
@@ -1191,6 +1505,11 @@ export const EventProvider = ({ children }) => {
       toast,
       showToast,
       triggerConfetti,
+      historyMeta,
+      undo,
+      redo,
+      currencyConfig,
+      setDisplayCurrency,
       addEvent,
       updateEvent,
       deleteEvent,
@@ -1211,6 +1530,14 @@ export const EventProvider = ({ children }) => {
       updateVendor,
       deleteVendor,
       updateVendorStatus,
+      addVendorQuote,
+      deleteVendorQuote,
+      acceptVendorQuote,
+      addGift,
+      updateGift,
+      deleteGift,
+      claimGiftForGuest,
+      setMoodTiles,
       addGuest,
       addGuests,
       updateGuest,

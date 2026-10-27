@@ -1,4 +1,4 @@
-import { Wallet, Clock, Users, Sparkles, MapPinned, CalendarClock, UserPlus, Images, Bot, ClipboardList } from 'lucide-react';
+import { Wallet, Clock, Users, Sparkles, MapPinned, CalendarClock, UserPlus, Images, Bot, ClipboardList, Gift, Palette } from 'lucide-react';
 
 export const QuickActionGrid = ({
   onAddExpense,
@@ -11,6 +11,8 @@ export const QuickActionGrid = ({
   onSharePhotos,
   onOpenAgentForce,
   onOpenDayOf,
+  onOpenGifts,
+  onOpenMoodBoard,
 }) => {
   const actions = [
     {
@@ -93,6 +95,22 @@ export const QuickActionGrid = ({
       badge: 'New',
       action: onFindVenue,
     },
+    {
+      label: 'Gift Registry',
+      description: 'Wish list, claims & purchases',
+      icon: Gift,
+      color: 'from-fuchsia-500 to-pink-500 text-fuchsia-600 bg-fuchsia-50 hover:bg-fuchsia-100',
+      badge: 'New',
+      action: onOpenGifts,
+    },
+    {
+      label: 'Mood Board',
+      description: 'Colors, imagery & vibe inspiration',
+      icon: Palette,
+      color: 'from-violet-500 to-purple-500 text-violet-600 bg-violet-50 hover:bg-violet-100',
+      badge: 'New',
+      action: onOpenMoodBoard,
+    },
   ];
 
   return (
@@ -104,7 +122,7 @@ export const QuickActionGrid = ({
         </div>
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
         {actions.map((act, index) => {
           const Icon = act.icon;
           return (

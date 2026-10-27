@@ -20,11 +20,14 @@ import { TimelineView } from '@/components/timeline/TimelineView';
 import { VendorChecklist } from '@/components/vendors/VendorChecklist';
 import { VenueFinder } from '@/components/venues/VenueFinder';
 import { GuestManager } from '@/components/guests/GuestManager';
+import { GiftRegistry } from '@/components/gifts/GiftRegistry';
+import { MoodBoard } from '@/components/moodboard/MoodBoard';
 import { PhotoWall } from '@/components/photos/PhotoWall';
 import { DayOfWorkbench } from '@/components/dayof/DayOfWorkbench';
 import { AgentForcePanel } from '@/components/force/AgentForcePanel';
 import { ThemeIdeaStudio } from '@/components/ai/ThemeIdeaStudio';
 import { AssistantChat } from '@/components/ai/AssistantChat';
+import { CurrencyModal } from '@/components/common/CurrencyModal';
 import { Heart } from 'lucide-react';
 
 // The print summary is a heavy, rarely-visited surface — load it lazily.
@@ -57,7 +60,7 @@ const SkipLink = () => (
 );
 
 const MainAppContent = () => {
-  const { activeEvent, exportEventsData } = useEventContext();
+  const { activeEvent, exportEventsData, undo, redo } = useEventContext();
   const [currentTab, setCurrentTab] = useState('dashboard');
 
   // Global ⌘K / Ctrl+K command palette
@@ -68,11 +71,26 @@ const MainAppContent = () => {
       if ((e.metaKey || e.ctrlKey) && (e.key === 'k' || e.key === 'K')) {
         e.preventDefault();
         setIsPaletteOpen((open) => !open);
+        return;
+      }
+      // Undo / redo — never hijacks native text-editing undo inside inputs.
+      if ((e.ctrlKey || e.metaKey) && !e.altKey && (e.key === 'z' || e.key === 'Z' || e.key === 'y' || e.key === 'Y')) {
+        const target = e.target;
+        const isEditable =
+          target instanceof HTMLElement &&
+          (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable);
+        if (isEditable) return;
+        e.preventDefault();
+        if (e.shiftKey || e.key === 'y' || e.key === 'Y') {
+          redo();
+        } else {
+          undo();
+        }
       }
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, []);
+  }, [undo, redo]);
 
   // Modal states
   const [isEventModalOpen, setIsEventModalOpen] = useState(false);
@@ -88,6 +106,7 @@ const MainAppContent = () => {
   const [vendorToEdit, setVendorToEdit] = useState(null);
 
   const [isApiKeyModalOpen, setIsApiKeyModalOpen] = useState(false);
+  const [isCurrencyModalOpen, setIsCurrencyModalOpen] = useState(false);
 
   // Helper openers — all setters are stable; callbacks stay cheap.
   const handleOpenNewEvent = () => {
@@ -142,6 +161,7 @@ const MainAppContent = () => {
         onOpenApiKey={() => setIsApiKeyModalOpen(true)}
         onEditCurrentEvent={handleEditCurrentEvent}
         onOpenPalette={() => setIsPaletteOpen(true)}
+        onOpenCurrency={() => setIsCurrencyModalOpen(true)}
       />
 
       {/* Main Content Area */}
@@ -187,7 +207,11 @@ const MainAppContent = () => {
 
         {currentTab === 'guests' && <GuestManager />}
 
+        {currentTab === 'gifts' && <GiftRegistry />}
+
         {currentTab === 'photos' && <PhotoWall />}
+
+        {currentTab === 'mood' && <MoodBoard />}
 
         {currentTab === 'dayof' && <DayOfWorkbench onNavigate={setCurrentTab} />}
 
@@ -269,6 +293,12 @@ const MainAppContent = () => {
         onClose={() => setIsApiKeyModalOpen(false)}
       />
 
+      {/* Display-currency settings (symbol + conversion) */}
+      <CurrencyModal
+        isOpen={isCurrencyModalOpen}
+        onClose={() => setIsCurrencyModalOpen(false)}
+      />
+
       {/* ⌘K / Ctrl+K command palette — sits above everything */}
       <CommandPalette
         open={isPaletteOpen}
@@ -279,6 +309,7 @@ const MainAppContent = () => {
         onOpenAddTask={handleOpenAddTask}
         onOpenAddVendor={handleOpenAddVendor}
         onOpenApiKey={() => setIsApiKeyModalOpen(true)}
+        onOpenCurrency={() => setIsCurrencyModalOpen(true)}
       />
 
       {/* Floating context-aware AI assistant (all tabs) */}
