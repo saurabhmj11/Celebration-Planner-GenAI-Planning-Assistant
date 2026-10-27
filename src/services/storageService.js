@@ -1,4 +1,11 @@
 import { INITIAL_EVENTS } from '../data/defaultData';
+import { makeId } from '../utils/ids';
+import {
+  MAX_PHOTOS_PER_EVENT,
+  validatePhotoDataUrl,
+  makePhotoMeta,
+  DEFAULT_PHOTO_ALBUM,
+} from '../lib/photos/photoModel';
 
 const STORAGE_KEYS = {
   EVENTS: 'celebration_planner_events_v1',
@@ -10,6 +17,7 @@ const STORAGE_KEYS = {
 const IMPORT_LIMITS = {
   MAX_EVENTS: 200,
   MAX_ITEMS_PER_EVENT: 500,
+  MAX_GUESTS_PER_EVENT: 300,
   MAX_STRING_LEN: 2_000,
   MAX_BUDGET: 100_000_000,
   MAX_GUESTS: 100_000,
@@ -40,6 +48,10 @@ function safeItemList(value, itemLimit = IMPORT_LIMITS.MAX_ITEMS_PER_EVENT) {
     .filter((item) => item && typeof item === 'object' && !Array.isArray(item))
     .slice(0, itemLimit);
 }
+
+const RSVP_IDS = new Set(['invited', 'attending', 'maybe', 'declined']);
+const GROUP_IDS = new Set(['family', 'friends', 'colleagues', 'vip', 'vendors']);
+const MEAL_IDS = new Set(['standard', 'vegetarian', 'vegan', 'gluten-free', 'kids', 'other']);
 
 /** Validate + normalize one imported event object. Returns null if unusable. */
 function normalizeImportedEvent(ev) {
@@ -77,6 +89,55 @@ function normalizeImportedEvent(ev) {
     cost: safeNumber(v.cost, IMPORT_LIMITS.MAX_BUDGET),
   }));
 
+  // Guest list — enum-normalized, capped, and always carrying a unique id.
+  const guests = safeItemList(ev.guests, IMPORT_LIMITS.MAX_GUESTS_PER_EVENT)
+    .map((g) => {
+      const name = safeString(g.name, 200);
+      if (!name) return null;
+      return {
+        id: safeString(g.id, 100) || makeId('guest'),
+        name,
+        email: safeString(g.email, 200),
+        phone: safeString(g.phone, 60),
+        group: GROUP_IDS.has(g.group) ? g.group : 'friends',
+        rsvp: RSVP_IDS.has(g.rsvp) ? g.rsvp : 'invited',
+        plusOnes: safeNumber(g.plusOnes, 10),
+        meal: MEAL_IDS.has(g.meal) ? g.meal : 'standard',
+        notes: safeString(g.notes, 500),
+      };
+    })
+    .filter(Boolean);
+
+  // Saved AI invitation copy — kept only when it has a real message body.
+  const rawInvite = ev.invitation && typeof ev.invitation === 'object' && !Array.isArray(ev.invitation) ? ev.invitation : null;
+  const invitation = rawInvite
+    ? {
+        headline: safeString(rawInvite.headline, 200),
+        message: safeString(rawInvite.message, 2_000),
+        signOff: safeString(rawInvite.signOff, 120),
+        rsvpDeadline: /^\d{4}-\d{2}-\d{2}$/.test(rawInvite.rsvpDeadline) ? rawInvite.rsvpDeadline : '',
+        generatedAt: safeString(rawInvite.generatedAt, 40),
+        source: safeString(rawInvite.source, 40),
+      }
+    : null;
+  const finalInvitation = invitation && invitation.message ? invitation : null;
+
+  // Photo memory wall — every data URL must pass the mime/danger allowlist.
+  const photos = safeItemList(ev.photos, MAX_PHOTOS_PER_EVENT)
+    .map((p) => {
+      const dataUrl = validatePhotoDataUrl(p.dataUrl);
+      if (!dataUrl) return null;
+      return {
+        id: safeString(p.id, 100) || makeId('photo'),
+        ...makePhotoMeta(dataUrl, {
+          caption: safeString(p.caption, 200),
+          album: DEFAULT_PHOTO_ALBUM,
+          favorite: Boolean(p.favorite),
+        }),
+      };
+    })
+    .filter(Boolean);
+
   return {
     id,
     title,
@@ -92,6 +153,9 @@ function normalizeImportedEvent(ev) {
     expenses,
     tasks,
     vendors,
+    guests,
+    invitation: finalInvitation,
+    photos,
   };
 }
 
@@ -118,8 +182,12 @@ export const storageService = {
   saveEvents(events) {
     try {
       localStorage.setItem(STORAGE_KEYS.EVENTS, JSON.stringify(events));
+      return true;
     } catch (e) {
+      // Quota-exceeded is the common case (large photo walls). Signal the
+      // caller so the UI can warn BEFORE the user loses recent work.
       console.error('Error saving events to localStorage', e);
+      return false;
     }
   },
 

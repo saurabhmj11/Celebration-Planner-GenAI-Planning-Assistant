@@ -168,3 +168,84 @@ export function calculateVendorStats(vendors) {
     totalCommittedCost,
   };
 }
+
+/**
+ * Aggregates the guest list into RSVP + headcount + kitchen metrics.
+ *
+ * `attendingHeadcount` is the number caterers actually plan for: attending
+ * guests PLUS the plus-ones they registered. Meal counts cover attending
+ * guests only — a declined guest's dinner preference is noise.
+ *
+ * @param {Array} guests - guest entries with { rsvp, plusOnes, meal, group }
+ */
+export function calculateGuestStats(guests) {
+  const safeGuests = Array.isArray(guests) ? guests : [];
+  const totalGuests = safeGuests.length;
+
+  const byStatus = { invited: 0, attending: 0, maybe: 0, declined: 0 };
+  const mealCounts = {};
+  const byGroup = {};
+  let plusOnesAttending = 0;
+
+  for (const g of safeGuests) {
+    const status = byStatus[g?.rsvp] !== undefined ? g.rsvp : 'invited';
+    byStatus[status] += 1;
+
+    const group = g?.group || 'friends';
+    byGroup[group] = (byGroup[group] || 0) + 1;
+
+    if (status === 'attending') {
+      const plusOnes = Math.max(0, Math.min(10, Number(g?.plusOnes) || 0));
+      plusOnesAttending += plusOnes;
+      const meal = g?.meal || 'standard';
+      mealCounts[meal] = (mealCounts[meal] || 0) + 1;
+    }
+  }
+
+  const responded = byStatus.attending + byStatus.maybe + byStatus.declined;
+  const responseRate = totalGuests > 0 ? Math.round((responded / totalGuests) * 100) : 0;
+
+  return {
+    totalGuests,
+    byStatus,
+    byGroup,
+    responded,
+    pending: byStatus.invited,
+    responseRate,
+    attendingHeadcount: byStatus.attending + plusOnesAttending,
+    plusOnesAttending,
+    mealCounts,
+  };
+}
+
+/**
+ * RSVP-deadline urgency for banner chips and nag badges.
+ * Mirrors getDueDateUrgency()'s shape ({status, diffDays, label, color})
+ * so existing chip markup can render either identically.
+ * @param {string} deadlineStr - 'YYYY-MM-DD'
+ * @param {Date} [referenceDate]
+ */
+export function getRsvpUrgency(deadlineStr, referenceDate = new Date()) {
+  if (!deadlineStr || !/^\d{4}-\d{2}-\d{2}$/.test(deadlineStr)) return null;
+
+  const [year, month, day] = deadlineStr.split('-').map(Number);
+  if (!Number.isInteger(year) || month < 1 || month > 12 || day < 1 || day > 31) return null;
+
+  const due = new Date(year, month - 1, day);
+  if (due.getMonth() !== month - 1 || due.getDate() !== day) return null;
+  if (Number.isNaN(due.getTime())) return null;
+
+  const now = new Date(referenceDate.getFullYear(), referenceDate.getMonth(), referenceDate.getDate());
+  const diffDays = Math.round((due.getTime() - now.getTime()) / 86_400_000);
+
+  if (diffDays < 0) {
+    return { status: 'overdue', diffDays, label: `RSVP deadline passed ${Math.abs(diffDays)}d ago`, color: 'text-rose-700 bg-rose-50 border-rose-200' };
+  }
+  if (diffDays === 0) {
+    return { status: 'today', diffDays, label: 'RSVPs due today!', color: 'text-amber-700 bg-amber-50 border-amber-200' };
+  }
+  if (diffDays <= 7) {
+    return { status: 'urgent', diffDays, label: `RSVPs close in ${diffDays}d`, color: 'text-amber-700 bg-amber-50 border-amber-200' };
+  }
+  return { status: 'upcoming', diffDays, label: `RSVPs close in ${diffDays}d`, color: 'text-slate-600 bg-slate-50 border-slate-200' };
+}

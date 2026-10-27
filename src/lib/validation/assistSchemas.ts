@@ -13,6 +13,7 @@
  *  - venue-recommend  : AI venue scout — rationale + negotiation tips for an
  *                       algorithm-ranked venue shortlist (anti-hallucination:
  *                       only ids from the curated catalog are accepted back)
+ *  - invitation-copy : guest-facing invitation wording tuned to tone + theme
  *  - plan-review     : score + strengths + risks + next actions for the whole plan
  *  - assistant-chat  : context-aware conversational planning helper
  */
@@ -154,6 +155,14 @@ const planReviewSchema = z
           .array(z.object({ title: shortText(160), dueDate: safeDate.optional() }))
           .max(5),
         unbookedCategories: categoryList,
+        guestStats: z
+          .object({
+            total: z.number().int().min(0),
+            attending: z.number().int().min(0),
+            pending: z.number().int().min(0),
+          })
+          .optional(),
+        rsvpDaysLeft: z.number().int().min(-3650).max(3650).optional(),
       })
       .strip(),
   })
@@ -175,6 +184,14 @@ const assistantChatSchema = z
         vendorStats: z.object({ total: z.number().int().min(0), booked: z.number().int().min(0) }).optional(),
         unbookedCategories: categoryList.optional(),
         upcomingTaskTitles: z.array(shortText(160)).max(5).optional(),
+        guestStats: z
+          .object({
+            total: z.number().int().min(0),
+            attending: z.number().int().min(0),
+            pending: z.number().int().min(0),
+          })
+          .optional(),
+        rsvpDaysLeft: z.number().int().min(-3650).max(3650).optional(),
         history: z
           .array(
             z.object({
@@ -190,12 +207,36 @@ const assistantChatSchema = z
   })
   .strip();
 
+const invitationCopySchema = z
+  .object({
+    task: z.literal("invitation-copy"),
+    payload: z
+      .object({
+        eventType: eventTypeEnum,
+        eventTitle: shortText(120),
+        hostName: shortText(120).optional(),
+        eventDate: safeDate.optional(),
+        eventTime: z
+          .string()
+          .regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Expected HH:MM")
+          .optional(),
+        location: shortText(200).optional(),
+        guestCount: z.number().int().min(0).max(100_000).optional(),
+        tone: z.enum(["warm", "formal", "playful", "elegant"]).optional(),
+        themeName: shortText(120).optional(),
+        rsvpDeadline: safeDate.optional(),
+      })
+      .strip(),
+  })
+  .strip();
+
 export const assistRequestSchema = z.discriminatedUnion("task", [
   budgetPlanSchema,
   timelinePlanSchema,
   vendorPlanSchema,
   vendorInquirySchema,
   venueRecommendSchema,
+  invitationCopySchema,
   planReviewSchema,
   assistantChatSchema,
 ]);
@@ -208,6 +249,7 @@ export const ASSIST_TASKS = [
   "vendor-plan",
   "vendor-inquiry",
   "venue-recommend",
+  "invitation-copy",
   "plan-review",
   "assistant-chat",
 ] as const;

@@ -1,8 +1,9 @@
-import React, { createContext, useContext, useState, useEffect, useMemo, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import confetti from 'canvas-confetti';
 import { storageService } from '../services/storageService';
 import { INITIAL_EVENTS } from '../data/defaultData';
 import { makeId, sanitizeEvents } from '../utils/ids';
+import { MAX_PHOTOS_PER_EVENT, validatePhotoDataUrl } from '../lib/photos/photoModel';
 
 const EventContext = createContext(null);
 
@@ -14,10 +15,23 @@ export const EventProvider = ({ children }) => {
   const [activeEventId, setActiveEventIdState] = useState(() => storageService.getActiveEventId());
   const [apiKey, setApiKeyState] = useState(() => storageService.getApiKey());
   const [toast, setToast] = useState(null);
+  const quotaWarnedRef = useRef(false);
 
-  // Sync events to localStorage
+  // Sync events to localStorage — surfacing quota failures (a full localStorage
+  // would otherwise silently drop the user's latest changes) exactly once
+  // per failure streak instead of spamming a toast on every keystroke.
   useEffect(() => {
-    storageService.saveEvents(events);
+    const ok = storageService.saveEvents(events);
+    if (!ok) {
+      if (!quotaWarnedRef.current) {
+        quotaWarnedRef.current = true;
+        showToast('Browser storage is full — export a backup and remove a few photos to keep saving.', 'error');
+      }
+    } else {
+      quotaWarnedRef.current = false;
+    }
+    // showToast is a stable useCallback; eslint exhaustive-deps on purpose.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [events]);
 
   // Sync active event ID
@@ -79,6 +93,9 @@ export const EventProvider = ({ children }) => {
       expenses: eventData.expenses || [],
       tasks: eventData.tasks || [],
       vendors: eventData.vendors || [],
+      guests: eventData.guests || [],
+      invitation: eventData.invitation || null,
+      photos: eventData.photos || [],
       budget: Number(eventData.budget) || 5000,
       guestCount: Number(eventData.guestCount) || 50,
     };
@@ -132,6 +149,9 @@ export const EventProvider = ({ children }) => {
       expenses: source.expenses ? source.expenses.map((exp) => ({ ...exp, id: makeId('exp') })) : [],
       tasks: source.tasks ? source.tasks.map((t) => ({ ...t, id: makeId('task'), completed: false })) : [],
       vendors: source.vendors ? source.vendors.map((v) => ({ ...v, id: makeId('v') })) : [],
+      guests: (source.guests || []).map((g) => ({ ...g, id: makeId('guest') })),
+      invitation: source.invitation ? { ...source.invitation } : null,
+      photos: (source.photos || []).map((p) => ({ ...p, id: makeId('photo') })),
     };
 
     setEvents((prev) => [duplicated, ...prev]);
@@ -440,6 +460,217 @@ export const EventProvider = ({ children }) => {
     showToast(`Vendor status updated to ${status}!`, 'info');
   }, [activeEvent, showToast]);
 
+  // ---------------- GUEST & RSVP ACTIONS ----------------
+  // updateGuest stays silent on purpose: inline RSVP/plus-one/meal selects
+  // fire it on every change and a toast per keystroke would be noise.
+
+  const addGuest = useCallback((guestData) => {
+    if (!activeEvent) return;
+    const newGuest = {
+      id: makeId('guest'),
+      name: String(guestData.name || '').trim().slice(0, 200),
+      email: String(guestData.email || '').trim().slice(0, 200),
+      phone: String(guestData.phone || '').trim().slice(0, 60),
+      group: guestData.group || 'friends',
+      rsvp: guestData.rsvp || 'invited',
+      plusOnes: Math.max(0, Math.min(10, Number(guestData.plusOnes) || 0)),
+      meal: guestData.meal || 'standard',
+      notes: String(guestData.notes || '').slice(0, 500),
+    };
+    if (!newGuest.name) return;
+
+    setEvents((prev) =>
+      prev.map((e) => {
+        if (e.id === activeEvent.id) {
+          return { ...e, guests: [newGuest, ...(e.guests || [])] };
+        }
+        return e;
+      })
+    );
+    showToast(`Added ${newGuest.name} to the guest list!`, 'success');
+  }, [activeEvent, showToast]);
+
+  /** Bulk-add guests (CSV import) in ONE state update — mirrors addTasks. */
+  const addGuests = useCallback((items) => {
+    if (!activeEvent || !Array.isArray(items) || items.length === 0) return 0;
+
+    const newGuests = items
+      .filter((g) => g && typeof g === 'object' && String(g.name || '').trim())
+      .map((g) => ({
+        id: makeId('guest'),
+        name: String(g.name).trim().slice(0, 200),
+        email: String(g.email || '').trim().slice(0, 200),
+        phone: String(g.phone || '').trim().slice(0, 60),
+        group: g.group || 'friends',
+        rsvp: g.rsvp || 'invited',
+        plusOnes: Math.max(0, Math.min(10, Number(g.plusOnes) || 0)),
+        meal: g.meal || 'standard',
+        notes: String(g.notes || '').slice(0, 500),
+      }));
+
+    if (newGuests.length === 0) return 0;
+
+    setEvents((prev) =>
+      prev.map((e) => {
+        if (e.id === activeEvent.id) {
+          return { ...e, guests: [...newGuests, ...(e.guests || [])] };
+        }
+        return e;
+      })
+    );
+    showToast(`Imported ${newGuests.length} guest${newGuests.length === 1 ? '' : 's'}!`, 'success');
+    return newGuests.length;
+  }, [activeEvent, showToast]);
+
+  const updateGuest = useCallback((guestId, updatedFields) => {
+    if (!activeEvent) return;
+    setEvents((prev) =>
+      prev.map((e) => {
+        if (e.id === activeEvent.id) {
+          return {
+            ...e,
+            guests: (e.guests || []).map((g) => {
+              if (g.id !== guestId) return g;
+              const next = { ...g, ...updatedFields };
+              if (updatedFields.plusOnes !== undefined) {
+                next.plusOnes = Math.max(0, Math.min(10, Number(updatedFields.plusOnes) || 0));
+              }
+              return next;
+            }),
+          };
+        }
+        return e;
+      })
+    );
+  }, [activeEvent]);
+
+  const deleteGuest = useCallback((guestId) => {
+    if (!activeEvent) return;
+    setEvents((prev) =>
+      prev.map((e) => {
+        if (e.id === activeEvent.id) {
+          return { ...e, guests: (e.guests || []).filter((g) => g.id !== guestId) };
+        }
+        return e;
+      })
+    );
+    showToast('Guest removed from the list.', 'info');
+  }, [activeEvent, showToast]);
+
+  /** Bulk delete selected guests (checkbox selection) in one update. */
+  const deleteGuests = useCallback((ids) => {
+    if (!activeEvent || !Array.isArray(ids) || ids.length === 0) return;
+    const kill = new Set(ids);
+    setEvents((prev) =>
+      prev.map((e) => {
+        if (e.id === activeEvent.id) {
+          return { ...e, guests: (e.guests || []).filter((g) => !kill.has(g.id)) };
+        }
+        return e;
+      })
+    );
+    showToast(`Removed ${ids.length} guest${ids.length === 1 ? '' : 's'} from the list.`, 'info');
+  }, [activeEvent, showToast]);
+
+  // ---------------- INVITATION ACTIONS ----------------
+
+  /** Save (or replace) the AI-generated invitation copy for the event. */
+  const saveInvitation = useCallback((invitation) => {
+    if (!activeEvent) return;
+    const cleaned = {
+      headline: String(invitation?.headline || '').slice(0, 200),
+      message: String(invitation?.message || '').slice(0, 2_000),
+      signOff: String(invitation?.signOff || '').slice(0, 120),
+      rsvpDeadline: /^\d{4}-\d{2}-\d{2}$/.test(invitation?.rsvpDeadline || '') ? invitation.rsvpDeadline : '',
+      generatedAt: invitation?.generatedAt || new Date().toISOString(),
+      source: String(invitation?.source || 'ai').slice(0, 40),
+    };
+    if (!cleaned.message.trim()) {
+      showToast('Add a message before saving the invitation.', 'info');
+      return;
+    }
+
+    setEvents((prev) =>
+      prev.map((e) => (e.id === activeEvent.id ? { ...e, invitation: cleaned } : e))
+    );
+    showToast('Invitation saved to this celebration! 💌', 'success');
+  }, [activeEvent, showToast]);
+
+  // ---------------- PHOTO MEMORY WALL ACTIONS ----------------
+
+  /**
+   * Bulk-add photo metadata (data URLs already downscaled + validated by
+   * photoService). Enforces the per-event cap so localStorage stays healthy.
+   * @returns {number} how many photos were actually added.
+   */
+  const addPhotos = useCallback((metas) => {
+    if (!activeEvent || !Array.isArray(metas) || metas.length === 0) return 0;
+
+    const valid = metas
+      .map((m) => {
+        const dataUrl = validatePhotoDataUrl(m?.dataUrl);
+        if (!dataUrl) return null;
+        return {
+          id: makeId('photo'),
+          dataUrl,
+          caption: String(m.caption || '').slice(0, 200),
+          album: m.album || 'candids',
+          favorite: Boolean(m.favorite),
+          createdAt: m.createdAt || new Date().toISOString(),
+        };
+      })
+      .filter(Boolean);
+
+    if (valid.length === 0) return 0;
+
+    setEvents((prev) =>
+      prev.map((e) => {
+        if (e.id === activeEvent.id) {
+          const room = Math.max(0, MAX_PHOTOS_PER_EVENT - (e.photos?.length || 0));
+          const accepted = valid.slice(0, room);
+          return { ...e, photos: [...(e.photos || []), ...accepted] };
+        }
+        return e;
+      })
+    );
+    const added = Math.min(valid.length, Math.max(0, MAX_PHOTOS_PER_EVENT - (activeEvent.photos?.length || 0)));
+    if (added > 0) {
+      showToast(`Added ${added} photo${added === 1 ? '' : 's'} to the memory wall! 📸`, 'success');
+    }
+    if (valid.length > added) {
+      showToast(`Photo wall is full (${MAX_PHOTOS_PER_EVENT} max) — ${valid.length - added} not added.`, 'info');
+    }
+    return added;
+  }, [activeEvent, showToast]);
+
+  const updatePhoto = useCallback((photoId, updatedFields) => {
+    if (!activeEvent) return;
+    setEvents((prev) =>
+      prev.map((e) => {
+        if (e.id === activeEvent.id) {
+          return {
+            ...e,
+            photos: (e.photos || []).map((p) => (p.id === photoId ? { ...p, ...updatedFields } : p)),
+          };
+        }
+        return e;
+      })
+    );
+  }, [activeEvent]);
+
+  const deletePhoto = useCallback((photoId) => {
+    if (!activeEvent) return;
+    setEvents((prev) =>
+      prev.map((e) => {
+        if (e.id === activeEvent.id) {
+          return { ...e, photos: (e.photos || []).filter((p) => p.id !== photoId) };
+        }
+        return e;
+      })
+    );
+    showToast('Photo removed from the wall.', 'info');
+  }, [activeEvent, showToast]);
+
   // ---------------- APPLY THEME TO EVENT ----------------
   const applyThemeToEvent = useCallback((theme) => {
     if (!activeEvent) return;
@@ -531,6 +762,18 @@ export const EventProvider = ({ children }) => {
       updateVendor,
       deleteVendor,
       updateVendorStatus,
+      // Guest & RSVP CRUD
+      addGuest,
+      addGuests,
+      updateGuest,
+      deleteGuest,
+      deleteGuests,
+      // Invitation
+      saveInvitation,
+      // Photo memory wall
+      addPhotos,
+      updatePhoto,
+      deletePhoto,
       // AI Theme Application
       applyThemeToEvent,
     }),
@@ -564,6 +807,15 @@ export const EventProvider = ({ children }) => {
       updateVendor,
       deleteVendor,
       updateVendorStatus,
+      addGuest,
+      addGuests,
+      updateGuest,
+      deleteGuest,
+      deleteGuests,
+      saveInvitation,
+      addPhotos,
+      updatePhoto,
+      deletePhoto,
       applyThemeToEvent,
     ]
   );

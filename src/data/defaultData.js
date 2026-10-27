@@ -1,5 +1,7 @@
 // Default categories, preset themes, and rich initial sample data for Celebration & Event Planner
 
+import { samplePhotosFor } from '../lib/photos/photoModel';
+
 export const EVENT_TYPES = [
   { id: 'wedding', label: 'Wedding', icon: '💍', color: 'from-pink-500 to-rose-600', badgeBg: 'bg-rose-50 text-rose-700 border-rose-200' },
   { id: 'birthday', label: 'Birthday Party', icon: '🎂', color: 'from-amber-500 to-orange-600', badgeBg: 'bg-amber-50 text-amber-700 border-amber-200' },
@@ -223,7 +225,30 @@ export const INITIAL_EVENTS = [
       { id: 'v-4', name: 'Botanica Flora Studio', category: 'decoration', contactPerson: 'Chloe Chen', phone: '(707) 555-4920', email: 'chloe@botanicaflora.com', cost: 3150, status: 'booked', rating: 4, notes: 'Installation begins at 12:30 PM' },
       { id: 'v-5', name: 'Golden State Sound & String Quartet', category: 'entertainment', contactPerson: 'Julian Vance', phone: '(510) 555-9018', email: 'julian@goldenstatesound.com', cost: 2600, status: 'booked', rating: 5, notes: 'Requires two power outlets near ceremony lawn' },
       { id: 'v-6', name: 'Sweet Heritage Custom Patisserie', category: 'cake', contactPerson: 'Amara Bell', phone: '(707) 555-3211', email: 'amara@sweetheritage.com', cost: 720, status: 'deposit_paid', rating: 5, notes: 'Delivery scheduled for 3:00 PM before heat peaks' },
-    ]
+    ],
+    guests: [
+      { id: 'guest-w1', name: 'Eleanor Vance', email: 'eleanor.vance@email.com', phone: '(415) 555-0182', group: 'family', rsvp: 'attending', plusOnes: 1, meal: 'standard', notes: 'Grandmother of the bride — reserve aisle-side accessible seating.' },
+      { id: 'guest-w2', name: 'Marco Rossi', email: 'marco.rossi@email.com', phone: '(707) 555-0234', group: 'family', rsvp: 'attending', plusOnes: 1, meal: 'vegetarian', notes: 'Flying in from Milan with Sofia; bringing their toddler.' },
+      { id: 'guest-w3', name: 'Priya & Arjun Nair', email: 'priya.nair@email.com', phone: '(408) 555-0771', group: 'friends', rsvp: 'attending', plusOnes: 0, meal: 'vegan', notes: 'Requested the vegan tasting plate from the vineyard menu.' },
+      { id: 'guest-w4', name: 'Chloe Beaumont', email: 'chloe.b@email.com', phone: '(707) 555-4920', group: 'friends', rsvp: 'attending', plusOnes: 0, meal: 'gluten-free', notes: 'Venue coordinator\'s daughter — seated away from the service table.' },
+      { id: 'guest-w5', name: 'Uncle Dev Patel', email: 'dev.patel@email.com', phone: '(650) 555-0310', group: 'family', rsvp: 'maybe', plusOnes: 0, meal: 'standard', notes: 'Overseas until early November — chasing for a final answer.' },
+      { id: 'guest-w6', name: 'Hannah & Tom Whitfield', email: 'hannah.whitfield@email.com', phone: '(206) 555-0155', group: 'friends', rsvp: 'maybe', plusOnes: 1, meal: 'standard', notes: 'Due around the wedding date — will confirm by Oct 30.' },
+      { id: 'guest-w7', name: 'Liam\'s Work Team — Studio Delta', email: 'events@studiodelta.com', phone: '(415) 555-0842', group: 'colleagues', rsvp: 'invited', plusOnes: 0, meal: 'standard', notes: 'Group invite for the groom\'s six studio colleagues.' },
+      { id: 'guest-w8', name: 'Dr. Sofia Almeida', email: 'sofia.almeida@email.com', phone: '(510) 555-0221', group: 'colleagues', rsvp: 'invited', plusOnes: 0, meal: 'vegetarian', notes: 'The bride\'s thesis advisor — invitation mailed last week.' },
+      { id: 'guest-w9', name: 'Grace & Ben Okafor', email: 'grace.okafor@email.com', phone: '(312) 555-0996', group: 'friends', rsvp: 'declined', plusOnes: 0, meal: 'standard', notes: 'Sent regrets — expecting their second child that month.' },
+      { id: 'guest-w10', name: 'Aunt Mei Chen', email: 'mei.chen@email.com', phone: '(925) 555-0712', group: 'family', rsvp: 'attending', plusOnes: 1, meal: 'standard', notes: 'Bringing Uncle Robert — both need the shuttle from the hotel.' },
+      { id: 'guest-w11', name: 'Julian Vance (DJ) +1', email: 'julian@goldenstatesound.com', phone: '(510) 555-9018', group: 'vendors', rsvp: 'attending', plusOnes: 1, meal: 'standard', notes: 'Vendor meal — setup from 4:00 PM.' },
+      { id: 'guest-w12', name: 'The Hendersons (Neighbors)', email: 'henderson.family@email.com', phone: '(707) 555-0558', group: 'friends', rsvp: 'invited', plusOnes: 0, meal: 'kids', notes: 'Two kids\' meals for their twins, family of four total.' },
+    ],
+    invitation: {
+      headline: 'Sophia & Liam invite you to their vineyard vows',
+      message: 'Under the golden-hour sky of Napa Valley, we would be honored to have you witness our marriage at the Vista Winery terrace. Join us for an evening of vineyard dining, string-quartet melodies, and dancing beneath the festoon lights — the moments we will remember most are the ones shared with you.',
+      signOff: 'With love & celebration, Sophia & Liam',
+      rsvpDeadline: '2026-11-01',
+      generatedAt: '2026-08-20T09:30:00Z',
+      source: 'sample',
+    },
+    photos: samplePhotosFor('event-wedding-01', ['#C46851', '#7A8B7B']),
   },
   {
     id: 'event-bday-02',
@@ -257,7 +282,26 @@ export const INITIAL_EVENTS = [
       { id: 'v-b1', name: 'Velvet Sky Rooftop', category: 'venue', contactPerson: 'Jordan Lee', phone: '(555) 018-4422', email: 'events@velvetsky.com', cost: 2400, status: 'booked', rating: 5, notes: 'Private bartender included' },
       { id: 'v-b2', name: 'RetroCade Game Rentals', category: 'entertainment', contactPerson: 'Samir Patel', phone: '(555) 019-3388', email: 'sam@retrocade.io', cost: 650, status: 'booked', rating: 5, notes: 'Delivery at 5pm' },
       { id: 'v-b3', name: 'DJ SynthWave Pulse', category: 'entertainment', contactPerson: 'Alex Rivera', phone: '(555) 012-7711', email: 'djpulse@beats.com', cost: 750, status: 'quote_received', rating: 5, notes: 'Awaiting contract sign-off' },
-    ]
+    ],
+    guests: [
+      { id: 'guest-b1', name: 'Jonas & Mira Weber', email: 'jonas.weber@email.com', phone: '(555) 201-3344', group: 'friends', rsvp: 'attending', plusOnes: 1, meal: 'standard', notes: 'Bringing retro board games for the arcade corner.' },
+      { id: 'guest-b2', name: 'Aisha Thompson', email: 'aisha.t@email.com', phone: '(555) 204-8812', group: 'friends', rsvp: 'attending', plusOnes: 0, meal: 'vegetarian', notes: 'Volunteering to run the Pac-Man tournament bracket.' },
+      { id: 'guest-b3', name: 'Marcus\'s Cousins (3)', email: 'kim.nguyen@email.com', phone: '(555) 207-1290', group: 'family', rsvp: 'attending', plusOnes: 2, meal: 'kids', notes: 'Group entry — Kim books for all three kids.' },
+      { id: 'guest-b4', name: 'Diego Alvarez', email: 'diego.alvarez@email.com', phone: '(555) 209-4471', group: 'colleagues', rsvp: 'attending', plusOnes: 0, meal: 'standard', notes: 'Promised to bring his vintage mixtape collection.' },
+      { id: 'guest-b5', name: 'Sasha & Leo Park', email: 'sasha.park@email.com', phone: '(555) 212-9950', group: 'friends', rsvp: 'maybe', plusOnes: 1, meal: 'standard', notes: 'Leo on call that weekend — confirming by Dec 1.' },
+      { id: 'guest-b6', name: 'Rhythm Collective (Band Mates)', email: 'bookings@rhythmcollective.io', phone: '(555) 215-6621', group: 'colleagues', rsvp: 'invited', plusOnes: 0, meal: 'standard', notes: 'Four-piece band invite — they might sit in with the DJ.' },
+      { id: 'guest-b7', name: 'Nadia Osei', email: 'nadia.osei@email.com', phone: '(555) 218-0733', group: 'friends', rsvp: 'invited', plusOnes: 0, meal: 'vegan', notes: 'Digital invite sent via the party group chat.' },
+      { id: 'guest-b8', name: 'Tom & Erika Larsen', email: 'erika.larsen@email.com', phone: '(555) 220-5518', group: 'family', rsvp: 'declined', plusOnes: 0, meal: 'standard', notes: 'Overseas for the holidays — sent a neon gift instead.' },
+    ],
+    invitation: {
+      headline: 'Marcus turns 30 — insert coin to continue',
+      message: 'The rooftop goes full 80s: neon lasers, free-play arcade cabinets, and a synthwave DJ set three hours long. Grab your brightest neon accents and join us at The Velvet Sky Lounge for a night of glowing drinks, glowing dance moves, and a cake worth a high score.',
+      signOff: 'Player One: Marcus',
+      rsvpDeadline: '2026-11-30',
+      generatedAt: '2026-10-02T18:00:00Z',
+      source: 'sample',
+    },
+    photos: samplePhotosFor('event-bday-02', ['#F43F5E', '#06B6D4']),
   },
   {
     id: 'event-comm-03',
@@ -286,6 +330,14 @@ export const INITIAL_EVENTS = [
     ],
     vendors: [
       { id: 'v-c1', name: 'Valley Event Rentals', category: 'rentals', contactPerson: 'Dave Miller', phone: '(555) 332-9011', email: 'dave@valleyrentals.com', cost: 2100, status: 'quote_received', rating: 4, notes: 'Setup morning of event at 7am' },
-    ]
+    ],
+    guests: [
+      { id: 'guest-c1', name: 'Mayor Alicia Fuentes', email: 'mayor@oakridge.gov', phone: '(555) 411-0001', group: 'vip', rsvp: 'attending', plusOnes: 1, meal: 'standard', notes: 'Opening the fair at 10:00 AM — ribbon cutting at the main gate.' },
+      { id: 'guest-c2', name: 'Oakridge High Brass Band (12 players)', email: 'band@oakridgehigh.edu', phone: '(555) 411-2278', group: 'vendors', rsvp: 'attending', plusOnes: 0, meal: 'standard', notes: 'Call time 9:00 AM by the bandstand; two chaperone meals.' },
+      { id: 'guest-c3', name: 'GreenLeaf Co-op Artisans', email: 'hello@greenleafcoop.org', phone: '(555) 411-3390', group: 'vendors', rsvp: 'invited', plusOnes: 0, meal: 'vegetarian', notes: 'Booths B1–B6; confirm final stall map by January.' },
+      { id: 'guest-c4', name: 'Coach Dana Reyes', email: 'dana.reyes@email.com', phone: '(555) 411-4412', group: 'colleagues', rsvp: 'maybe', plusOnes: 0, meal: 'standard', notes: 'Coordinating 20 youth volunteers — depends on season schedule.' },
+      { id: 'guest-c5', name: 'Park Ranger Bill Hutchins', email: 'b.hutchins@parks.gov', phone: '(555) 411-5501', group: 'vip', rsvp: 'attending', plusOnes: 0, meal: 'gluten-free', notes: 'Permit officer — walkthrough at 8:00 AM, compost stations signed off.' },
+    ],
+    photos: samplePhotosFor('event-comm-03', ['#10B981', '#FBBF24']),
   }
 ];
