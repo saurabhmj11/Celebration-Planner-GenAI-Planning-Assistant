@@ -278,3 +278,18 @@ Stage Summary:
 - Deliverable: the enterprise workflow now closes the full loop — plan → invite → RSVP → SEAT (AI seating strategist + weighted-capacity chart) → PAY (AI payment schedule ledger with overdue/next-due surfacing) → RUN THE DAY (AI-authored, printable minute-by-minute run sheet) — all produced by the new Agent Force layer, a 4-agent AI workforce with mission-control UI, live activity feed, per-event run history, live-GLM-first/offline-fallback tiers, and anti-hallucination + capacity/date server-side enforcement. 324/324 tests, lint clean, live E2E verified end-to-end before resetting to pristine samples.
 - Key files: src/context/EventContext.jsx, src/lib/planning/seating.js, src/lib/agents/{registry,payloads}.js, src/hooks/useAgentForce.js, src/lib/ai/assist/tasks.ts (+schemas/route), src/services/{assistOffline,aiAssist}.js, src/components/dayof/* (7 files), src/components/force/AgentForcePanel.jsx, src/utils/{calculator,ids}.js, src/data/defaultData.js, Navbar/PlannerApp/QuickActionGrid/globals.css, tests/{utils/dayofStats,planning/seating,ai/agentPayloads,ai/offlineAgents,api/assist-route}.test.ts.
 - Roadmap (from the gap analysis, still open): guest-facing share links + real cloud sync/backend persistence, guest photo upload, backup/undo history, mood board, vendor quote comparison, multi-currency/i18n, PWA, command palette.
+
+---
+Task ID: 12 (verification addendum)
+Agent: Main agent (Z.ai)
+Task: Post-delivery re-verification pass after session resume (user ack "yaaa") — confirm Task 12 deliverable is fully green before final hand-off.
+
+Work Log:
+- Re-ran the full suite: 324/324 tests pass (24 files, 1613 expect calls, ~300ms); `bun run lint` 100% clean.
+- Dev server live at localhost:3000 (HTTP 200); agent-browser pass at 1440x900 with ZERO console/page errors.
+- Verified in DOM: 11-tab navbar (Agent Force + Day-Of Workbench present); Dashboard 10-action quick grid led by Agent Force + Day-Of Plan; Agent Force panel renders the 4-agent roster (Seating Strategist / Payment Controller / Day-Of Producer / Plan Auditor) with Deploy Force (4 agents), Activity Feed, Run History; Day-Of Workbench renders run-sheet cues with done/edit/delete actions + Print + Add cue; Payments tab surfaces the overdue banner ("1 payment overdue totalling $1,650").
+- Sample data confirmed pristine (run history empty, original seat maps, cues un-done).
+- Artifact: scripts/final-verify-dayof-payments.png.
+
+Stage Summary:
+- Task 12 confirmed fully delivered and stable: Day-Of Readiness package + Agent Force layer, 324/324 tests, lint clean, live app verified. Ready for user hand-off.
