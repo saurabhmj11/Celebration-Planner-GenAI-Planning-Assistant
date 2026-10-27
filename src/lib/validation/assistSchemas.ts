@@ -20,6 +20,9 @@
  *                       from the request are accepted back; anti-hallucination)
  *  - payment-schedule : Agent Force — deposit/balance milestones from vendors
  *  - run-sheet        : Agent Force — minute-by-minute day-of schedule
+ *  - event-intake     : AI event intake prompter — detect + understand a
+ *                       free-form celebration description and structure it
+ *                       (type/date/budget/guests/vibe + tailored plan)
  */
 
 import { z } from "zod";
@@ -321,6 +324,18 @@ const runSheetSchema = z
   })
   .strip();
 
+const eventIntakeSchema = z
+  .object({
+    task: z.literal("event-intake"),
+    payload: z
+      .object({
+        prompt: z.string().min(8).max(1200),
+        today: safeDate,
+      })
+      .strip(),
+  })
+  .strip();
+
 export const assistRequestSchema = z.discriminatedUnion("task", [
   budgetPlanSchema,
   timelinePlanSchema,
@@ -333,6 +348,7 @@ export const assistRequestSchema = z.discriminatedUnion("task", [
   seatingPlanSchema,
   paymentScheduleSchema,
   runSheetSchema,
+  eventIntakeSchema,
 ]);
 
 export type AssistRequest = z.infer<typeof assistRequestSchema>;
@@ -349,6 +365,7 @@ export const ASSIST_TASKS = [
   "seating-plan",
   "payment-schedule",
   "run-sheet",
+  "event-intake",
 ] as const;
 
 export type AssistTaskId = (typeof ASSIST_TASKS)[number];

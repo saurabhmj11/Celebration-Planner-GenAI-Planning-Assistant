@@ -868,6 +868,210 @@ ${JSON_RULES}`,
 };
 
 /* ------------------------------------------------------------------ */
+/* 12. Event intake (AI prompter on new-event creation)                */
+/* ------------------------------------------------------------------ */
+
+export interface EventIntakeResult {
+  title: string;
+  eventType:
+    | "wedding"
+    | "birthday"
+    | "community"
+    | "anniversary"
+    | "gala"
+    | "babyshower"
+    | "other";
+  date: string | null;
+  time: string | null;
+  budget: number | null;
+  guestCount: number | null;
+  locationHint: string | null;
+  vibe: string;
+  summary: string;
+  confidence: "high" | "medium" | "low";
+  milestones: {
+    title: string;
+    description: string;
+    dueDate: string;
+    priority: "high" | "medium" | "low";
+    category: string;
+  }[];
+  budgetLines: { category: string; percent: number }[];
+  suggestions: string[];
+}
+
+const INTAKE_EVENT_TYPES = [
+  "wedding",
+  "birthday",
+  "community",
+  "anniversary",
+  "gala",
+  "babyshower",
+  "other",
+] as const;
+
+const intakeTask: AssistTask<
+  Extract<AssistRequest, { task: "event-intake" }>["payload"],
+  EventIntakeResult
+> = {
+  systemHint:
+    "event intake detection: reading a free-form celebration description and structuring it into an actionable plan",
+  buildUserPrompt: (p) => `
+A user is describing a celebration they want to plan. Read their description, detect and understand every fact, and structure it into a plan.
+
+User's description (verbatim):
+"""
+${str(p.prompt, 1200)}
+"""
+
+Today's date: ${p.today}
+
+Respond strictly in valid JSON matching exactly this schema:
+{
+  "title": "Catchy, personal event title (under 70 chars, use names mentioned; e.g. \"Ava's Enchanted 7th Birthday\")",
+  "eventType": "wedding|birthday|community|anniversary|gala|babyshower|other",
+  "date": "YYYY-MM-DD or null if no date is determinable",
+  "time": "HH:MM 24h start time or null if not mentioned",
+  "budget": <total budget as a plain number, or null if not mentioned>,
+  "guestCount": <estimated guest count as a plain number, or null if not mentioned>,
+  "locationHint": "Place/venue/area mentioned, under 120 chars, or null",
+  "vibe": "The described atmosphere in 2-5 words (e.g. 'rustic garden evening')",
+  "summary": "1-2 sentences confirming what you understood (under 240 chars)",
+  "confidence": "high|medium|low — how completely the description pinned the facts",
+  "milestones": [
+    { "title": "Action item (under 90 chars)", "description": "Concrete detail (under 180 chars)", "dueDate": "YYYY-MM-DD", "priority": "high|medium|low", "category": "venue|catering|decoration|photography|entertainment|logistics|stationery|attire|other" }
+  ],
+  "budgetLines": [
+    { "category": "Budget category (Venue, Catering, Photography, Decoration, Entertainment, Attire, Invitations, Contingency...)", "percent": 25 }
+  ],
+  "suggestions": ["Next step specific to this celebration (under 140 chars)"]
+}
+Rules:
+- Use ONLY facts from the description. If a fact is not stated, return null — NEVER invent dates, budgets, or guest counts.
+- Resolve relative dates against today (${p.today}): "next June" means the next June after today; include the year you resolved.
+- "50th" or "30th birthday" language implies a birthday; "quinceanera" is a birthday; "gala/fundraiser/corporate" maps to gala.
+- milestones: 6 to 10 items ONLY if a date was detected; every dueDate between ${p.today} and the event date; long-lead bookings (venue, catering) first and high priority. Return [] if no date.
+- budgetLines: 5 to 8 lines, whole-number percents 5-50 that sum to 100, tuned to this event type and scale.
+- suggestions: exactly 3, referencing the user's own details (names, venue, theme).
+${JSON_RULES}`,
+  normalize: (parsed) => {
+    if (typeof parsed !== "object" || parsed === null) return null;
+    const obj = parsed as Record<string, unknown>;
+
+    // Today is injected by the route via _today (never trusted from the model).
+    const today =
+      typeof obj._today === "string" && isSafeDateString(obj._today)
+        ? obj._today
+        : new Date().toISOString().slice(0, 10);
+
+    const title = str(obj.title, 90).trim();
+    if (!title) return null;
+
+    const eventType = INTAKE_EVENT_TYPES.includes(obj.eventType as never)
+      ? (obj.eventType as EventIntakeResult["eventType"])
+      : "other";
+
+    const date = isSafeDateString(obj.date) ? (obj.date as string) : null;
+
+    const timeRaw = str(obj.time, 5);
+    const time = /^([01]\d|2[0-3]):[0-5]\d$/.test(timeRaw) ? timeRaw : null;
+
+    const budget =
+      obj.budget === null || obj.budget === undefined
+        ? null
+        : Math.min(100_000_000, Math.max(0, Math.round(Number(obj.budget) || 0)));
+
+    const guestCount =
+      obj.guestCount === null || obj.guestCount === undefined
+        ? null
+        : Number.isFinite(Number(obj.guestCount))
+          ? clampInt(obj.guestCount, 1, 100_000)
+          : null;
+
+    const locationHint = str(obj.locationHint, 160).trim() || null;
+
+    // Milestones only make sense with a resolved event date; clamp each into
+    // [today, eventDate] so nothing lands in the past or past the celebration.
+    const rawMilestones = Array.isArray(obj.milestones) ? obj.milestones : [];
+    const milestones = (
+      date
+        ? rawMilestones.map((m) => {
+            if (typeof m !== "object" || m === null) return null;
+            const rec = m as Record<string, unknown>;
+            const mTitle = str(rec.title, 120);
+            if (!mTitle) return null;
+            return {
+              title: mTitle,
+              description: str(rec.description, 240),
+              dueDate: isSafeDateString(rec.dueDate)
+                ? String(rec.dueDate) < today
+                  ? today
+                  : String(rec.dueDate) > date
+                    ? date
+                    : (rec.dueDate as string)
+                : date,
+              priority:
+                rec.priority === "high" || rec.priority === "low" ? rec.priority : "medium",
+              category: str(rec.category, 40) || "other",
+            };
+          })
+        : []
+    )
+      .filter((m): m is EventIntakeResult["milestones"][number] => m !== null)
+      .slice(0, 12);
+    if (date && milestones.length > 1) {
+      milestones.sort((a, b) => a.dueDate.localeCompare(b.dueDate));
+    }
+
+    // Budget lines: keep 3-9, rescale to exactly 100.
+    const rawLines = Array.isArray(obj.budgetLines) ? obj.budgetLines : [];
+    const budgetLines = rawLines
+      .map((l) => {
+        if (typeof l !== "object" || l === null) return null;
+        const rec = l as Record<string, unknown>;
+        const category = str(rec.category, 60);
+        if (!category) return null;
+        return { category, percent: clampInt(rec.percent, 1, 100) };
+      })
+      .filter((l): l is EventIntakeResult["budgetLines"][number] => l !== null)
+      .slice(0, 9);
+    if (budgetLines.length >= 3) {
+      const sum = budgetLines.reduce((acc, l) => acc + l.percent, 0);
+      if (sum > 0) {
+        const scale = 100 / sum;
+        let running = 0;
+        budgetLines.forEach((l) => {
+          l.percent = Math.max(1, Math.round(l.percent * scale));
+          running += l.percent;
+        });
+        budgetLines[0].percent += 100 - running;
+      }
+    }
+
+    const suggestions = strList(obj.suggestions, 5, 180);
+
+    return {
+      title,
+      eventType,
+      date,
+      time,
+      budget,
+      guestCount,
+      locationHint,
+      vibe: str(obj.vibe, 90) || "warm, well-organized celebration",
+      summary: str(obj.summary, 320) || "Here is what I understood from your description.",
+      confidence:
+        obj.confidence === "high" || obj.confidence === "low"
+          ? obj.confidence
+          : "medium",
+      milestones: date ? milestones : [],
+      budgetLines,
+      suggestions,
+    };
+  },
+};
+
+/* ------------------------------------------------------------------ */
 /* Registry                                                           */
 /* ------------------------------------------------------------------ */
 
@@ -883,6 +1087,7 @@ export const ASSIST_TASK_REGISTRY = {
   "seating-plan": seatingTask,
   "payment-schedule": paymentTask,
   "run-sheet": runSheetTask,
+  "event-intake": intakeTask,
 } as const;
 
 export type AssistTaskKey = keyof typeof ASSIST_TASK_REGISTRY;
@@ -942,6 +1147,17 @@ export function withSeatingIds(
 export function withPaymentWindow(parsed: unknown, minDate: string, maxDate: string): unknown {
   if (typeof parsed === "object" && parsed !== null) {
     return { ...(parsed as Record<string, unknown>), _minDate: minDate, _maxDate: maxDate };
+  }
+  return parsed;
+}
+
+/**
+ * Tag a parsed event-intake response with the trusted "today" so milestone
+ * clamping never depends on a model-supplied clock.
+ */
+export function withIntakeToday(parsed: unknown, today: string): unknown {
+  if (typeof parsed === "object" && parsed !== null) {
+    return { ...(parsed as Record<string, unknown>), _today: today };
   }
   return parsed;
 }

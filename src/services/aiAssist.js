@@ -23,6 +23,7 @@ import {
   offlineSeatingPlan,
   offlinePaymentSchedule,
   offlineRunSheet,
+  offlineEventIntake,
 } from './assistOffline.js';
 
 export const ASSIST_ENDPOINT = '/api/ai/assist';
@@ -123,5 +124,9 @@ export const aiAssist = {
 
   runSheet(payload) {
     return runTask('run-sheet', payload, offlineRunSheet);
+  },
+
+  eventIntake(payload) {
+    return runTask('event-intake', payload, offlineEventIntake);
   },
 };

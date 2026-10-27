@@ -142,7 +142,7 @@ export const ApiKeyModal = ({ isOpen, onClose }) => {
             <div className="flex items-start gap-2">
               <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
               <span>
-                <strong>Built-in GenAI Engine: Connected.</strong> The app's server-side AI engine powers six GenAI capabilities — AI Theme Studio, Budget Copilot, Milestone Planner, Vendor Advisor & inquiry drafts, Plan Review, and the 24/7 Planning Assistant. No configuration or API key is required.
+                <strong>Built-in GenAI Engine: Connected.</strong> The app's server-side AI engine powers twelve GenAI capabilities — the AI Intake Prompter (describe a new celebration in plain words and it builds the plan), AI Theme Studio, Budget Copilot, Milestone Planner, Vendor Advisor & inquiry drafts, AI Venue Scout, Invitation Studio, Plan Review, the 24/7 Planning Assistant, and the Agent Force (seating, payments, run sheet). No configuration or API key is required.
               </span>
             </div>
           </div>

@@ -9,6 +9,7 @@ import {
   withVenueCandidateIds,
   withSeatingIds,
   withPaymentWindow,
+  withIntakeToday,
 } from "@/lib/ai/assist/tasks";
 import { checkRateLimit, getClientKey } from "@/lib/security/rateLimit";
 import {
@@ -140,6 +141,9 @@ export function createAssistPostHandler(runEngine: RunEngine) {
           }
           if (task === "payment-schedule") {
             parsedJson = withPaymentWindow(parsedJson, payload.today, payload.eventDate);
+          }
+          if (task === "event-intake") {
+            parsedJson = withIntakeToday(parsedJson, payload.today);
           }
           const data = registry.normalize(parsedJson);
           if (!data) {

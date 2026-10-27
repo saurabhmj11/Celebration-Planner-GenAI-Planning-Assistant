@@ -594,6 +594,118 @@ describe("POST /api/ai/assist — happy paths", () => {
     expect(state.calls[0][1].content).toContain("Marcus's 30th");
     expect(state.calls[0][1].content).toContain("Curate party playlist");
   });
+
+  test("event-intake detects fields, clamps milestones into [today, eventDate] and rescales budget lines", async () => {
+    state.responses = [
+      {
+        model: "mock-glm",
+        content: fenced({
+          title: "Ava's Enchanted 7th Birthday",
+          eventType: "birthday",
+          date: "2027-06-14",
+          time: "15:00",
+          budget: 3000,
+          guestCount: 20,
+          locationHint: "Willow Park",
+          vibe: "sparkly garden",
+          summary: "A fairy-themed 7th birthday for 20 kids.",
+          confidence: "high",
+          milestones: [
+            // Past date → clamps to today; future date → clamps to the event date.
+            { title: "Book Willow Park pavilion", description: "Reserve early.", dueDate: "2020-01-01", priority: "high", category: "venue" },
+            { title: "Order the cake", description: "", dueDate: "2099-01-01", priority: "low", category: "catering" },
+            { title: "Send invitations", description: "", dueDate: "2027-05-01", priority: "medium", category: "stationery" },
+          ],
+          budgetLines: [
+            { category: "Venue & Rentals", percent: 40 },
+            { category: "Catering & Cake", percent: 30 },
+            { category: "Entertainment", percent: 20 },
+          ],
+          suggestions: ["Lock the pavilion", "Book the fairy entertainer", "Order the cake"],
+        }),
+      },
+    ];
+
+    const res = await POST(
+      makeRequest({
+        task: "event-intake",
+        payload: {
+          prompt: "Ava's fairy-themed 7th birthday for ~20 kids on June 14 at Willow Park, $3,000 budget",
+          today: "2026-10-27",
+        },
+      })
+    );
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.task).toBe("event-intake");
+    expect(body.data.title).toBe("Ava's Enchanted 7th Birthday");
+    expect(body.data.eventType).toBe("birthday");
+    expect(body.data.date).toBe("2027-06-14");
+    expect(body.data.time).toBe("15:00");
+    expect(body.data.budget).toBe(3000);
+    expect(body.data.guestCount).toBe(20);
+    expect(body.data.locationHint).toBe("Willow Park");
+    expect(body.data.confidence).toBe("high");
+
+    // Milestones sorted + clamped into [today, eventDate].
+    expect(body.data.milestones.map((m: { dueDate: string }) => m.dueDate)).toEqual([
+      "2026-10-27",
+      "2027-05-01",
+      "2027-06-14",
+    ]);
+
+    // Budget lines rescaled to exactly 100.
+    const percentSum = body.data.budgetLines.reduce(
+      (acc: number, l: { percent: number }) => acc + l.percent,
+      0
+    );
+    expect(percentSum).toBe(100);
+    expect(body.data.budgetLines.length).toBe(3);
+
+    // Prompt grounding: verbatim description + trusted today reach the model.
+    expect(state.calls[0][1].content).toContain("Ava's fairy-themed 7th birthday");
+    expect(state.calls[0][1].content).toContain("2026-10-27");
+  });
+
+  test("event-intake drops milestones when no date was detected and repairs bad fields", async () => {
+    state.responses = [
+      {
+        content: JSON.stringify({
+          title: "Family Reunion Celebration",
+          eventType: "pool-party", // unknown → 'other'
+          date: null,
+          time: "25:99", // invalid → null
+          budget: -50, // negative → 0
+          guestCount: "tons", // NaN → null
+          milestones: [{ title: "Should be dropped", dueDate: "2027-01-01", priority: "high", category: "venue" }],
+          budgetLines: [{ category: "Only One", percent: 100 }], // < 3 lines kept as-is
+          suggestions: [],
+          summary: "",
+          confidence: "bogus", // → 'medium'
+        }),
+      },
+    ];
+
+    const res = await POST(
+      makeRequest({
+        task: "event-intake",
+        payload: { prompt: "Something small and nice for the whole family", today: "2026-10-27" },
+      })
+    );
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.data.eventType).toBe("other");
+    expect(body.data.date).toBeNull();
+    expect(body.data.time).toBeNull();
+    expect(body.data.budget).toBe(0);
+    expect(body.data.guestCount).toBeNull();
+    expect(body.data.milestones).toEqual([]); // no date → never dated milestones
+    expect(body.data.budgetLines).toEqual([{ category: "Only One", percent: 100 }]);
+    expect(body.data.confidence).toBe("medium");
+    expect(body.data.summary.length).toBeGreaterThan(0); // fallback copy
+  });
 });
 
 /* ------------------------------------------------------------------ */

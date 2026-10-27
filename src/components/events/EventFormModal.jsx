@@ -1,15 +1,36 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useModalFocus } from '../../hooks/useModalFocus';
 import { useEventContext } from '../../context/EventContext';
-import { EVENT_TYPES } from '../../data/defaultData';
+import { EVENT_TYPES, BUDGET_CATEGORIES } from '../../data/defaultData';
 import { VENUES, VENUE_TYPES } from '../../data/venues';
 import { topVenueSuggestions, estimateVenueCost } from '../../lib/venues/recommender';
 import { buildStarterTasks } from '../../lib/planning/starterPlan';
 import { formatCurrency, formatShortDate } from '../../utils/formatters';
-import { X, Calendar, MapPin, Users, DollarSign, Clock, Sparkles, FileText, CheckCircle, MapPinned, AlertTriangle, Info, RefreshCw } from 'lucide-react';
+import { makeId } from '../../utils/ids';
+import { aiAssist } from '../../services/aiAssist';
+import { mapCategoryToFallback, derivePhase } from '../../components/ai/aiKit';
+import { X, Calendar, MapPin, Users, DollarSign, Clock, Sparkles, FileText, CheckCircle, MapPinned, AlertTriangle, Info, RefreshCw, Wand2, Loader2 } from 'lucide-react';
 
 /** Share of the total budget assumed bookable for the venue. */
 const VENUE_BUDGET_SHARE = 0.35;
+
+/** One-tap intake examples — tuned to show off date/budget/guest/type detection. */
+const INTAKE_EXAMPLES = [
+  "Ava's fairy-themed 7th birthday for ~20 kids on June 14 at Willow Park, $3,000 budget",
+  'Backyard wedding for 120 guests in September, $30k budget, rustic garden vibe',
+  'Charity gala for 200 at the downtown Hilton, black-tie, $50,000 budget, 7pm',
+];
+
+/** Tiny chip shown next to any form field the AI intake filled. */
+const AiTag = () => (
+  <span
+    title="Filled by the AI intake prompter"
+    className="inline-flex items-center gap-0.5 rounded-full bg-gradient-to-r from-brand-100 to-fuchsia-100 border border-brand-200 px-1.5 py-px text-[9px] font-extrabold uppercase tracking-wide text-brand-700"
+  >
+    <Sparkles className="w-2.5 h-2.5" aria-hidden="true" />
+    AI
+  </span>
+);
 
 /** Match-badge tone — mirrors the AI Venue Finder tab card for consistency. */
 const scoreTone = (s) => (s >= 85 ? 'bg-emerald-500' : s >= 70 ? 'bg-amber-500' : 'bg-slate-500');
@@ -44,6 +65,14 @@ export const EventFormModal = ({ isOpen, onClose, eventToEdit = null }) => {
   // When the celebration TYPE changes on an edit, offer to rebuild the timeline
   // (default on — the plan should follow the celebration type).
   const [rebuildTimeline, setRebuildTimeline] = useState(true);
+
+  // --- AI intake prompter state (create mode only) ---
+  const [intakePrompt, setIntakePrompt] = useState('');
+  const [intakeLoading, setIntakeLoading] = useState(false);
+  const [intakeError, setIntakeError] = useState('');
+  const [intakeResult, setIntakeResult] = useState(null); // { data, source, model }
+  const [aiFields, setAiFields] = useState(() => new Set());
+  const [applyIntakePlan, setApplyIntakePlan] = useState(true);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -80,6 +109,13 @@ export const EventFormModal = ({ isOpen, onClose, eventToEdit = null }) => {
       setSelectedVenueId(null);
       setErrors({});
       setRebuildTimeline(true);
+      // Fresh intake state for every new-event session.
+      setIntakePrompt('');
+      setIntakeLoading(false);
+      setIntakeError('');
+      setIntakeResult(null);
+      setAiFields(new Set());
+      setApplyIntakePlan(true);
     }
   }, [eventToEdit, isOpen]);
 
@@ -121,6 +157,89 @@ export const EventFormModal = ({ isOpen, onClose, eventToEdit = null }) => {
 
   if (!isOpen) return null;
 
+  /** Update one form field and drop its "AI filled" chip the moment a human edits it. */
+  const setField = (field, value) => {
+    setFormData((prev) => ({ ...prev, [field]: value }));
+    setAiFields((prev) => {
+      if (!prev.has(field)) return prev;
+      const next = new Set(prev);
+      next.delete(field);
+      return next;
+    });
+  };
+
+  /** Run the free-form description through the AI intake: detect → fill form → draft plan. */
+  const handleRunIntake = async () => {
+    const prompt = intakePrompt.trim();
+    if (prompt.length < 8) {
+      setIntakeError('Describe your celebration in a sentence or two (at least 8 characters).');
+      return;
+    }
+    setIntakeLoading(true);
+    setIntakeError('');
+    try {
+      const result = await aiAssist.eventIntake({
+        prompt,
+        today: new Date().toISOString().slice(0, 10),
+      });
+      const d = result?.data;
+      if (!d || !d.title) {
+        throw new Error('empty');
+      }
+      setIntakeResult(result);
+      setApplyIntakePlan(true);
+
+      const filled = new Set(['title']);
+      setFormData((prev) => {
+        const next = { ...prev, title: d.title };
+        if (d.eventType) {
+          next.type = d.eventType;
+          filled.add('type');
+        }
+        if (d.date) {
+          next.date = d.date;
+          filled.add('date');
+        }
+        if (d.time) {
+          next.time = d.time;
+          filled.add('time');
+        }
+        if (typeof d.budget === 'number' && d.budget > 0) {
+          next.budget = d.budget;
+          filled.add('budget');
+        }
+        if (typeof d.guestCount === 'number' && d.guestCount > 0) {
+          next.guestCount = d.guestCount;
+          filled.add('guestCount');
+        }
+        if (d.locationHint && (!prev.location || aiFields.has('location'))) {
+          next.location = d.locationHint;
+          filled.add('location');
+          setSelectedVenueId(null);
+        }
+        if (!prev.description && d.summary) {
+          next.description = d.summary;
+          filled.add('description');
+        }
+        return next;
+      });
+      setAiFields(filled);
+      // Anything the AI just filled can no longer be invalid.
+      setErrors((prev) => {
+        const next = { ...prev };
+        filled.forEach((f) => delete next[f]);
+        return next;
+      });
+    } catch {
+      setIntakeResult(null);
+      setIntakeError(
+        'The AI engine could not read that description. Try rephrasing with more detail, or fill the form manually.'
+      );
+    } finally {
+      setIntakeLoading(false);
+    }
+  };
+
   const validate = () => {
     const errs = {};
     if (!formData.title.trim()) errs.title = 'Event title is required.';
@@ -157,12 +276,48 @@ export const EventFormModal = ({ isOpen, onClose, eventToEdit = null }) => {
           : {};
       updateEvent(eventToEdit.id, { ...formData, ...venueFields, ...timelineFields });
     } else {
-      // New celebrations start with a type-aware starter timeline instead of
-      // an empty plan — dated relative to the chosen event date.
+      // New celebration: if the AI intake drafted a plan and the user kept it,
+      // seed the timeline + budget from what the agent understood — otherwise
+      // fall back to the type-aware starter checklist.
+      const intake = applyIntakePlan ? intakeResult?.data : null;
+      const milestones = intake?.milestones || [];
+      const budgetLines = intake?.budgetLines || [];
+
+      const tasks =
+        milestones.length >= 3
+          ? milestones.map((m) => ({
+              id: makeId('task'),
+              title: m.title,
+              notes: m.description
+                ? `${m.description}\n\n(AI intake milestone drafted from your description — edit freely or regenerate with AI in the Timeline tab.)`
+                : 'AI intake milestone drafted from your description — edit freely or regenerate with AI in the Timeline tab.',
+              dueDate: m.dueDate,
+              priority: m.priority || 'medium',
+              category: m.category || 'other',
+              phase: derivePhase(m.dueDate, formData.date),
+              completed: false,
+            }))
+          : buildStarterTasks({ type: formData.type, date: formData.date });
+
+      const expenses =
+        budgetLines.length >= 3
+          ? budgetLines.map((l) => ({
+              id: makeId('exp'),
+              name: `${l.category} (AI plan)`,
+              category: mapCategoryToFallback(l.category, BUDGET_CATEGORIES) || 'miscellaneous',
+              allocated: Math.round((Number(formData.budget) * l.percent) / 100),
+              spent: 0,
+              paid: false,
+              date: new Date().toISOString().slice(0, 10),
+              notes: `AI intake plan — ${l.percent}% of your ${formatCurrency(Number(formData.budget) || 0)} budget, drafted from your description.`,
+            }))
+          : [];
+
       addEvent({
         ...formData,
         ...venueFields,
-        tasks: buildStarterTasks({ type: formData.type, date: formData.date }),
+        tasks,
+        ...(expenses.length > 0 ? { expenses } : {}),
       });
     }
     onClose();
@@ -211,10 +366,190 @@ export const EventFormModal = ({ isOpen, onClose, eventToEdit = null }) => {
 
         {/* Form Body */}
         <form onSubmit={handleSubmit} className="p-6 md:p-8 space-y-6">
+          {/* AI Intake Prompter — describe it, the agent detects + drafts the plan */}
+          {!isEditing && (
+            <section
+              aria-labelledby="intake-prompt-title"
+              className="rounded-3xl border border-brand-200/80 bg-gradient-to-br from-brand-50/90 via-white to-fuchsia-50/70 p-4 md:p-5 shadow-sm"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h4
+                    id="intake-prompt-title"
+                    className="flex items-center gap-2 font-display font-bold text-brand-900"
+                  >
+                    <span
+                      className="inline-flex items-center justify-center w-7 h-7 rounded-xl bg-gradient-to-br from-brand-500 to-fuchsia-500 text-white shadow-sm"
+                      aria-hidden="true"
+                    >
+                      <Wand2 className="w-4 h-4" />
+                    </span>
+                    Describe it — the AI fills this form
+                  </h4>
+                  <p className="mt-1 text-[11px] leading-relaxed text-brand-800/80">
+                    One or two sentences: who, what, when, where, budget, vibe. The agent detects the
+                    details and drafts a tailored plan — everything stays editable.
+                  </p>
+                </div>
+              </div>
+
+              <label htmlFor="intake-prompt" className="sr-only">
+                Describe your celebration for the AI to detect
+              </label>
+              <textarea
+                id="intake-prompt"
+                rows={3}
+                value={intakePrompt}
+                onChange={(e) => setIntakePrompt(e.target.value)}
+                placeholder="e.g. Ava's fairy-themed 7th birthday for ~20 kids on June 14 at Willow Park, $3,000 budget, sparkly garden vibe…"
+                aria-describedby={intakeError ? 'intake-prompt-error' : 'intake-prompt-hint'}
+                aria-invalid={Boolean(intakeError)}
+                className="mt-3 w-full px-4 py-2.5 text-sm bg-white/90 border border-brand-200 rounded-2xl focus:bg-white focus:ring-2 focus:ring-brand-500 outline-none transition-all resize-none placeholder:text-slate-400"
+              />
+
+              <div className="mt-2 flex flex-wrap items-center gap-1.5" aria-hidden="true">
+                {INTAKE_EXAMPLES.map((ex) => (
+                  <button
+                    key={ex}
+                    type="button"
+                    onClick={() => {
+                      setIntakePrompt(ex);
+                      setIntakeError('');
+                    }}
+                    className="max-w-full truncate rounded-full border border-brand-200 bg-white/80 px-2.5 py-1 text-[10px] font-semibold text-brand-700 hover:border-brand-400 hover:bg-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+                  >
+                    {ex.length > 46 ? `${ex.slice(0, 46)}…` : ex}
+                  </button>
+                ))}
+              </div>
+
+              <div className="mt-3 flex flex-wrap items-center gap-3">
+                <button
+                  type="button"
+                  onClick={handleRunIntake}
+                  disabled={intakeLoading}
+                  className="h-10 inline-flex items-center gap-2 px-5 text-sm font-bold text-white bg-gradient-to-r from-brand-600 to-fuchsia-600 hover:from-brand-700 hover:to-fuchsia-700 rounded-xl shadow-lg shadow-brand-500/25 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 disabled:opacity-70 disabled:cursor-wait"
+                >
+                  {intakeLoading ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
+                      Reading your description…
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="w-4 h-4" aria-hidden="true" />
+                      Detect &amp; Draft Plan
+                    </>
+                  )}
+                </button>
+                <span
+                  id="intake-prompt-hint"
+                  className="text-[10px] font-medium text-slate-500"
+                  aria-live="polite"
+                >
+                  {intakeLoading
+                    ? 'The agent is detecting your event type, date, budget and guests…'
+                    : 'Powered by the live GLM engine — falls back to the offline detector automatically.'}
+                </span>
+              </div>
+
+              {intakeError && (
+                <p
+                  id="intake-prompt-error"
+                  role="alert"
+                  className="mt-2 flex items-start gap-1.5 text-xs font-medium text-rose-600"
+                >
+                  <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" aria-hidden="true" />
+                  {intakeError}
+                </p>
+              )}
+
+              {/* Detection result — confirmation + tailored plan preview */}
+              {intakeResult?.data && !intakeLoading && (
+                <div className="mt-3 rounded-2xl border border-emerald-200 bg-white/95 p-3.5">
+                  <div className="flex items-start gap-2.5">
+                    <CheckCircle className="w-4 h-4 text-emerald-500 mt-0.5 shrink-0" aria-hidden="true" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs leading-relaxed text-slate-700">{intakeResult.data.summary}</p>
+                      <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                        <span
+                          className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                            intakeResult.data.confidence === 'high'
+                              ? 'bg-emerald-100 text-emerald-800'
+                              : intakeResult.data.confidence === 'medium'
+                                ? 'bg-amber-100 text-amber-800'
+                                : 'bg-slate-100 text-slate-700'
+                          }`}
+                        >
+                          {intakeResult.data.confidence} confidence
+                        </span>
+                        <span className="inline-flex items-center gap-1 rounded-full bg-brand-50 border border-brand-200 px-2 py-0.5 text-[10px] font-bold text-brand-700">
+                          <Sparkles className="w-2.5 h-2.5" aria-hidden="true" />
+                          {intakeResult.source === 'live-ai'
+                            ? `Live AI · ${intakeResult.model || 'GLM'}`
+                            : 'Offline detector'}
+                        </span>
+                        {intakeResult.data.milestones.length > 0 && (
+                          <span className="rounded-full bg-sky-50 border border-sky-200 px-2 py-0.5 text-[10px] font-bold text-sky-800">
+                            {intakeResult.data.milestones.length} tailored milestones
+                          </span>
+                        )}
+                        {intakeResult.data.budgetLines.length >= 3 && (
+                          <span className="rounded-full bg-fuchsia-50 border border-fuchsia-200 px-2 py-0.5 text-[10px] font-bold text-fuchsia-800">
+                            {intakeResult.data.budgetLines.length} budget lines
+                          </span>
+                        )}
+                      </div>
+
+                      {(intakeResult.data.milestones.length > 0 ||
+                        intakeResult.data.budgetLines.length >= 3) && (
+                        <label className="mt-2.5 flex items-start gap-2.5 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={applyIntakePlan}
+                            onChange={(e) => setApplyIntakePlan(e.target.checked)}
+                            className="mt-0.5 h-4 w-4 rounded border-brand-300 text-brand-600 focus:ring-brand-500"
+                          />
+                          <span className="text-xs font-semibold text-slate-700">
+                            Build my plan from this draft
+                            <span className="font-normal text-slate-500">
+                              {' '}(adds{' '}
+                              {intakeResult.data.milestones.length > 0
+                                ? `${intakeResult.data.milestones.length} milestones`
+                                : 'the type starter checklist'}
+                              {intakeResult.data.budgetLines.length >= 3
+                                ? ` + ${intakeResult.data.budgetLines.length} planned budget lines`
+                                : ''}
+                              )
+                            </span>
+                          </span>
+                        </label>
+                      )}
+
+                      {intakeResult.data.suggestions?.length > 0 && (
+                        <ul className="mt-2 space-y-1">
+                          {intakeResult.data.suggestions.slice(0, 3).map((s) => (
+                            <li
+                              key={s}
+                              className="flex items-start gap-1.5 text-[11px] leading-relaxed text-slate-600"
+                            >
+                              <span className="mt-1.5 h-1 w-1 rounded-full bg-brand-400 shrink-0" aria-hidden="true" />
+                              {s}
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </section>
+          )}
+
           {/* Event Type Grid Selection */}
           <div>
             <span id="event-type-label" className={labelBase}>
-              Celebration Type
+              Celebration Type {aiFields.has('type') && <AiTag />}
             </span>
             <div
               className="grid grid-cols-2 sm:grid-cols-3 gap-2.5"
@@ -228,7 +563,7 @@ export const EventFormModal = ({ isOpen, onClose, eventToEdit = null }) => {
                     key={t.id}
                     type="button"
                     aria-pressed={isSelected}
-                    onClick={() => setFormData({ ...formData, type: t.id })}
+                    onClick={() => setField('type', t.id)}
                     className={`flex items-center gap-2.5 min-h-14 px-3 py-2 rounded-2xl border text-left transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 ${
                       isSelected
                         ? 'border-brand-500 bg-brand-50/80 ring-2 ring-brand-500/30 text-brand-900 font-semibold shadow-sm'
@@ -246,13 +581,14 @@ export const EventFormModal = ({ isOpen, onClose, eventToEdit = null }) => {
           {/* Title */}
           <div>
             <label htmlFor="event-title" className={labelBase}>
-              Event Title <span className="text-rose-500" aria-hidden="true">*</span>
+              Event Title <span className="text-rose-500" aria-hidden="true">*</span>{' '}
+              {aiFields.has('title') && <AiTag />}
             </label>
             <input
               id="event-title"
               type="text"
               value={formData.title}
-              onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+              onChange={(e) => setField('title', e.target.value)}
               placeholder="e.g. Liam & Maya's Sunset Garden Wedding"
               aria-required="true"
               aria-invalid={Boolean(errors.title)}
@@ -272,12 +608,13 @@ export const EventFormModal = ({ isOpen, onClose, eventToEdit = null }) => {
               <label htmlFor="event-date" className={`${labelBase} flex items-center gap-1.5`}>
                 <Calendar className="w-3.5 h-3.5 text-brand-600" aria-hidden="true" />
                 Date <span className="text-rose-500" aria-hidden="true">*</span>
+                {aiFields.has('date') && <AiTag />}
               </label>
               <input
                 id="event-date"
                 type="date"
                 value={formData.date}
-                onChange={(e) => setFormData({ ...formData, date: e.target.value })}
+                onChange={(e) => setField('date', e.target.value)}
                 aria-required="true"
                 aria-invalid={Boolean(errors.date)}
                 aria-describedby={errors.date ? 'event-date-error' : undefined}
@@ -293,7 +630,7 @@ export const EventFormModal = ({ isOpen, onClose, eventToEdit = null }) => {
             <div>
               <label htmlFor="event-time" className={`${labelBase} flex items-center gap-1.5`}>
                 <Clock className="w-3.5 h-3.5 text-brand-600" aria-hidden="true" />
-                Time
+                Time {aiFields.has('time') && <AiTag />}
                 <span className="ml-0.5 text-[10px] font-semibold normal-case tracking-normal text-slate-400">
                   optional
                 </span>
@@ -302,7 +639,7 @@ export const EventFormModal = ({ isOpen, onClose, eventToEdit = null }) => {
                 id="event-time"
                 type="time"
                 value={formData.time}
-                onChange={(e) => setFormData({ ...formData, time: e.target.value })}
+                onChange={(e) => setField('time', e.target.value)}
                 className={`${inputBase} ${inputTone(false)}`}
               />
             </div>
@@ -314,13 +651,14 @@ export const EventFormModal = ({ isOpen, onClose, eventToEdit = null }) => {
               <label htmlFor="event-guests" className={`${labelBase} flex items-center gap-1.5`}>
                 <Users className="w-3.5 h-3.5 text-brand-600" aria-hidden="true" />
                 Estimated Guests <span className="text-rose-500" aria-hidden="true">*</span>
+                {aiFields.has('guestCount') && <AiTag />}
               </label>
               <input
                 id="event-guests"
                 type="number"
                 min="1"
                 value={formData.guestCount}
-                onChange={(e) => setFormData({ ...formData, guestCount: e.target.value })}
+                onChange={(e) => setField('guestCount', e.target.value)}
                 placeholder="50"
                 aria-required="true"
                 aria-invalid={Boolean(errors.guestCount)}
@@ -338,6 +676,7 @@ export const EventFormModal = ({ isOpen, onClose, eventToEdit = null }) => {
               <label htmlFor="event-budget" className={`${labelBase} flex items-center gap-1.5`}>
                 <DollarSign className="w-3.5 h-3.5 text-brand-600" aria-hidden="true" />
                 Total Budget <span className="text-rose-500" aria-hidden="true">*</span>
+                {aiFields.has('budget') && <AiTag />}
               </label>
               <div className="relative">
                 <span
@@ -352,7 +691,7 @@ export const EventFormModal = ({ isOpen, onClose, eventToEdit = null }) => {
                   min="0"
                   step="50"
                   value={formData.budget}
-                  onChange={(e) => setFormData({ ...formData, budget: e.target.value })}
+                  onChange={(e) => setField('budget', e.target.value)}
                   placeholder="10000"
                   aria-required="true"
                   aria-invalid={Boolean(errors.budget)}
@@ -373,6 +712,7 @@ export const EventFormModal = ({ isOpen, onClose, eventToEdit = null }) => {
             <label htmlFor="event-location" className={`${labelBase} flex items-center gap-1.5`}>
               <MapPin className="w-3.5 h-3.5 text-brand-600" aria-hidden="true" />
               Location / Venue <span className="text-rose-500" aria-hidden="true">*</span>
+              {aiFields.has('location') && <AiTag />}
             </label>
             <input
               id="event-location"
@@ -380,7 +720,7 @@ export const EventFormModal = ({ isOpen, onClose, eventToEdit = null }) => {
               value={formData.location}
               onChange={(e) => {
                 if (selectedVenueId) setSelectedVenueId(null);
-                setFormData({ ...formData, location: e.target.value });
+                setField('location', e.target.value);
               }}
               placeholder="e.g. Grand Vista Vineyard Estate"
               aria-required="true"
@@ -498,13 +838,13 @@ export const EventFormModal = ({ isOpen, onClose, eventToEdit = null }) => {
           <div>
             <label htmlFor="event-vision" className={`${labelBase} flex items-center gap-1.5`}>
               <FileText className="w-3.5 h-3.5 text-brand-600" aria-hidden="true" />
-              Celebration Vision & Special Notes
+              Celebration Vision & Special Notes {aiFields.has('description') && <AiTag />}
             </label>
             <textarea
               id="event-vision"
               rows={3}
               value={formData.description}
-              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+              onChange={(e) => setField('description', e.target.value)}
               placeholder="Describe your atmosphere, vibe, dress code, or specific desires..."
               className="w-full px-4 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-2xl focus:bg-white focus:ring-2 focus:ring-brand-500 outline-none transition-all resize-none placeholder:text-slate-400"
             />
@@ -555,19 +895,42 @@ export const EventFormModal = ({ isOpen, onClose, eventToEdit = null }) => {
               </p>
             </div>
           )}
-          {!isEditing && formData.date && (
-            <div
-              role="note"
-              className="flex items-start gap-2.5 rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3"
-            >
-              <Info className="w-4 h-4 text-sky-600 mt-0.5 shrink-0" aria-hidden="true" />
-              <p className="text-xs leading-relaxed text-sky-800">
-                On save, a <span className="font-bold">starter {EVENT_TYPES.find((t) => t.id === formData.type)?.label.toLowerCase() || 'celebration'} checklist</span> is
-                added to your timeline, dated for {formatShortDate(formData.date)} — edit it freely or let
-                AI regenerate a richer plan in the Timeline tab.
-              </p>
-            </div>
-          )}
+          {!isEditing && formData.date && (() => {
+            const intake = applyIntakePlan ? intakeResult?.data : null;
+            const milestoneCount = intake?.milestones?.length || 0;
+            const lineCount = intake?.budgetLines?.length || 0;
+            const planFromIntake = milestoneCount >= 3;
+            return (
+              <div
+                role="note"
+                className="flex items-start gap-2.5 rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3"
+              >
+                <Info className="w-4 h-4 text-sky-600 mt-0.5 shrink-0" aria-hidden="true" />
+                <p className="text-xs leading-relaxed text-sky-800">
+                  {planFromIntake ? (
+                    <>
+                      On save, the <span className="font-bold">AI-drafted plan from your description</span> is
+                      added: <span className="font-bold">{milestoneCount} tailored milestones</span> dated up to{' '}
+                      {formatShortDate(formData.date)}
+                      {lineCount >= 3 ? (
+                        <>
+                          {' '}+ <span className="font-bold">{lineCount} planned budget lines</span> totalling
+                          your {formatCurrency(Number(formData.budget) || 0)} budget
+                        </>
+                      ) : null}
+                      . Edit anything freely afterwards.
+                    </>
+                  ) : (
+                    <>
+                      On save, a <span className="font-bold">starter {EVENT_TYPES.find((t) => t.id === formData.type)?.label.toLowerCase() || 'celebration'} checklist</span> is
+                      added to your timeline, dated for {formatShortDate(formData.date)} — edit it freely or let
+                      AI regenerate a richer plan in the Timeline tab.
+                    </>
+                  )}
+                </p>
+              </div>
+            );
+          })()}
 
           {/* Modal Actions */}
           <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">

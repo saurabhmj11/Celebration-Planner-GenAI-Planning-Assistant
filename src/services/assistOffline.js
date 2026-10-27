@@ -829,3 +829,251 @@ export function offlineRunSheet({
     items,
   };
 }
+
+/* ------------------------------------------------------------------ */
+/* 12. Event intake (AI prompter fallback — rule-based detector)       */
+/* ------------------------------------------------------------------ */
+
+/** Keyword → event type. First match wins; order matters (most specific first). */
+const INTAKE_TYPE_KEYWORDS = [
+  ['babyshower', ['baby shower', 'baby-shower', 'sprinkle for the baby', 'parents-to-be']],
+  ['wedding', ['wedding', 'bride', 'groom', 'bridal', 'marriage', 'nuptial', 'elopement', 'rehearsal dinner']],
+  ['anniversary', ['anniversary', 'renewing vows', 'vow renewal', 'years of marriage']],
+  ['gala', ['gala', 'fundraiser', 'fundraising', 'charity ball', 'corporate', 'black-tie event', 'award night', 'conference']],
+  ['community', ['community', 'neighborhood', 'festival', 'fair', 'carnival', 'block party', 'school event', 'fundraiser for the']],
+  ['birthday', ['birthday', 'bday', 'b-day', 'quinceanera', 'quinceañera', 'sweet sixteen', 'sweet 16', 'mitzvah', '1st birthday']],
+];
+
+const MONTHS = [
+  ['january', 'jan'], ['february', 'feb'], ['march', 'mar'], ['april', 'apr'],
+  ['may', 'may'], ['june', 'jun'], ['july', 'jul'], ['august', 'aug'],
+  ['september', 'sep', 'sept'], ['october', 'oct'], ['november', 'nov'], ['december', 'dec'],
+];
+
+/** Parse "June 14", "June 14, 2026", "14 June 2026", "Sept 3rd 2026" → next occurrence ≥ today. */
+function detectDate(text, today) {
+  const iso = text.match(/\b(\d{4})-(\d{2})-(\d{2})\b/);
+  if (iso) return iso[0];
+
+  const now = new Date(`${today}T12:00:00`);
+  for (let m = 0; m < 12; m++) {
+    for (const alias of MONTHS[m]) {
+      // Month-name-first: "June 14" / "June 14th, 2026" (trailing \b stops "2027" being read as day 20).
+      let re = new RegExp(`\\b${alias}\\s+(\\d{1,2})(?:st|nd|rd|th)?(?:,|\\s)?\\s*(\\d{4})?\\b`, 'i');
+      let match = text.match(re);
+      if (match) {
+        const day = Number(match[1]);
+        const year = match[2] ? Number(match[2]) : null;
+        return resolveMonthDay(now, m, day, year, today);
+      }
+      // Day-first: "14 June 2026" / "14th of June"
+      re = new RegExp(`\\b(\\d{1,2})(?:st|nd|rd|th)?\\s+(?:of\\s+)?${alias}\\s*(\\d{4})?\\b`, 'i');
+      match = text.match(re);
+      if (match) {
+        const day = Number(match[1]);
+        const year = match[2] ? Number(match[2]) : null;
+        return resolveMonthDay(now, m, day, year, today);
+      }
+      // Bare month + year: "in September 2027" → the 1st of that month.
+      re = new RegExp(`\\b${alias}\\s+(\\d{4})\\b`, 'i');
+      match = text.match(re);
+      if (match) {
+        const iso = resolveMonthDay(now, m, 1, Number(match[1]), today);
+        if (iso) return iso;
+      }
+    }
+  }
+  return null;
+}
+
+function resolveMonthDay(now, monthIdx, day, year, today) {
+  if (day < 1 || day > 31) return null;
+  let candidate = new Date(year ?? now.getFullYear(), monthIdx, day, 12, 0, 0);
+  if (Number.isNaN(candidate.getTime())) return null;
+  // No year given (or a Feb 29 with no year) — take the next occurrence.
+  if (year === null && candidate < now) {
+    candidate = new Date(now.getFullYear() + 1, monthIdx, day, 12, 0, 0);
+    if (Number.isNaN(candidate.getTime())) return null;
+  }
+  const iso = candidate.toISOString().slice(0, 10);
+  return iso >= today ? iso : today; // past explicit dates clamp to today for planning purposes
+}
+
+/** Parse "$20k", "20,000 dollars", "budget of 5000", "around $30–40k" (takes the first). */
+function detectBudget(text) {
+  const patterns = [
+    /\$\s?([\d,]+(?:\.\d+)?)\s?(k\b|thousand|million|m\b|mil\b)/i,
+    /\$\s?([\d,]+(?:\.\d+)?)/,
+    /\bbudget (?:of|is|around|about)?\s?\$?\s?([\d,]+(?:\.\d+)?)\s?(k\b|thousand|million|m\b|mil\b)?/i,
+  ];
+  for (const re of patterns) {
+    const match = text.match(re);
+    if (!match) continue;
+    let amount = Number(match[1].replace(/,/g, ''));
+    if (!Number.isFinite(amount) || amount <= 0) continue;
+    const unit = (match[2] || '').toLowerCase();
+    if (unit === 'k' || unit === 'thousand') amount *= 1000;
+    if (unit === 'm' || unit === 'million' || unit === 'mil') amount *= 1_000_000;
+    if (amount < 50 || amount > 100_000_000) continue; // "$50" is not a budget
+    return Math.round(amount);
+  }
+  return null;
+}
+
+/** Parse "120 guests", "~200 people", "party of 30", "20 kids". */
+function detectGuestCount(text) {
+  const patterns = [
+    /\b(?:about|around|~|approx\.?|approximately)?\s?(\d{2,5})\s*(?:\+)?\s*(?:guests?|people|attendees?|persons?|invites?|pax|seats?)\b/i,
+    /\bparty of (\d{1,4})\b/i,
+    /\b(\d{2,4})\s*(?:kids|children|little ones)\b/i,
+  ];
+  for (const re of patterns) {
+    const match = text.match(re);
+    if (match) {
+      const n = Number(match[1]);
+      if (n >= 1 && n <= 100_000) return n;
+    }
+  }
+  return null;
+}
+
+/** Parse "at 5pm", "starting 18:30", "from 2:30 pm". */
+function detectTime(text) {
+  const match = text.match(/\b(?:at|from|starting|starts?)\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b/i);
+  if (match) {
+    let hour = Number(match[1]) % 12;
+    if (match[3].toLowerCase() === 'pm') hour += 12;
+    return `${String(hour).padStart(2, '0')}:${match[2] || '00'}`;
+  }
+  const iso = text.match(/\b(?:at|from|starting|starts?)\s+(\d{1,2}):(\d{2})\b/i);
+  if (iso && Number(iso[1]) <= 23) return `${iso[1].padStart(2, '0')}:${iso[2]}`;
+  return null;
+}
+
+/** "Ava's 7th birthday" → "Ava's 7th Birthday"; quoted titles win. */
+function detectTitle(text, eventType) {
+  const quoted = text.match(/["“]([^"”]{4,60})["”]/);
+  if (quoted) return quoted[1].trim();
+
+  const possessive = text.match(/\b([A-Z][\w'’-]*(?:\s+[A-Z][\w'’-]*)?)'s\s+(birthday|wedding|anniversary|gala|party|celebration|shower|quinceañera|quinceanera|bar mitzvah|bat mitzvah)/);
+  if (possessive) {
+    const name = possessive[1];
+    const kind = possessive[2].replace(/\b\w/g, (c) => c.toUpperCase());
+    return `${name}'s ${kind}`;
+  }
+
+  const ordinal = text.match(/\b(\d{1,3})(?:st|nd|rd|th)\s+(birthday|anniversary|wedding anniversary)\b/i);
+  if (ordinal) {
+    const kind = ordinal[2].replace(/\b\w/g, (c) => c.toUpperCase());
+    return `${ordinal[1]}${ordinal[1].endsWith('1') && ordinal[1] !== '11' ? 'st' : ordinal[1].endsWith('2') && ordinal[1] !== '12' ? 'nd' : ordinal[1].endsWith('3') && ordinal[1] !== '13' ? 'rd' : 'th'} ${kind}`;
+  }
+
+  const labels = { ...EVENT_LABELS, other: 'celebration' };
+  const label = (labels[eventType] || 'celebration');
+  return label.replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+/** Words that follow at/on/in but are dates, not places. */
+const PLACE_STOP_WORDS = new Set([
+  ...MONTHS.flat(),
+  'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday',
+  'tomorrow', 'tonight', 'today',
+]);
+
+/** "at the Hilton", "at Golden Gate Park" → hint (capped); skips date words. */
+function detectLocationHint(text) {
+  const re = /\b(?:at|near|in|on)\s+(?:the\s+)?([A-Z][\w'’&.-]*(?:\s+[A-Z][\w'’&.-]*){0,3})/g;
+  for (const match of text.matchAll(re)) {
+    const place = match[1].trim();
+    if (place && !PLACE_STOP_WORDS.has(place.toLowerCase())) {
+      return place.slice(0, 120);
+    }
+  }
+  return null;
+}
+
+/**
+ * Rule-based AI intake fallback — mirrors the live event-intake normalizer's
+ * shape so the modal never cares which tier answered.
+ * @returns {{
+ *   title, eventType, date, time, budget, guestCount, locationHint, vibe,
+ *   summary, confidence, milestones: {title,description,dueDate,priority,category}[],
+ *   budgetLines: {category,percent}[], suggestions: string[]
+ * }}
+ */
+export function offlineEventIntake({ prompt = '', today = todayStr() } = {}) {
+  const text = String(prompt).slice(0, 1200);
+
+  // Word-boundary matching so "fairy" never trips the "fair" keyword.
+  const hasKeyword = (kw) =>
+    new RegExp(`\\b${kw.replace(/[.*+?^${}()|[\\]\\]/g, '\\$&')}\\b`, 'i').test(text);
+
+  let eventType = 'other';
+  for (const [type, keywords] of INTAKE_TYPE_KEYWORDS) {
+    if (keywords.some(hasKeyword)) {
+      eventType = type;
+      break;
+    }
+  }
+
+  const date = detectDate(text, today);
+  const budget = detectBudget(text);
+  const guestCount = detectGuestCount(text);
+  const time = detectTime(text);
+  const locationHint = detectLocationHint(text);
+  const title = detectTitle(text, eventType);
+
+  const daysUntilEvent = date
+    ? Math.max(0, Math.round((new Date(`${date}T12:00:00`) - new Date(`${today}T12:00:00`)) / 86_400_000))
+    : 45;
+
+  const milestones = date
+    ? offlineTimelinePlan({
+        eventType,
+        eventDate: date,
+        daysUntilEvent,
+      }).tasks.map((t) => ({
+        title: t.title,
+        description: t.description,
+        dueDate: t.dueDate,
+        priority: t.priority || 'medium',
+        category: t.category || 'logistics',
+      }))
+    : [];
+
+  const budgetLines = offlineBudgetPlan({
+    eventType,
+    totalBudget: budget ?? 10_000,
+    guestCount: guestCount ?? 50,
+  }).allocations.map((a) => ({ category: a.category, percent: a.percent }));
+
+  const facts = [
+    date ? `dated ${date}` : null,
+    budget ? `budgeted at ${money(budget)}` : null,
+    guestCount ? `for about ${guestCount} guests` : null,
+    time ? `starting ${time}` : null,
+  ].filter(Boolean);
+  const summary = `Understood: a ${EVENT_LABELS[eventType]}${facts.length ? ` ${facts.join(', ')}` : ''}${locationHint ? ` at ${locationHint}` : ''}. Confirm the details below and adjust anything before saving.`;
+
+  const suggestions = [
+    date ? 'Lock the venue first — every other quote depends on the date.' : 'Pick a date — milestones and payments schedule themselves from it.',
+    budget ? `Hold ${money(Math.round(budget * 0.1))} (10%) as contingency until the final week.` : 'Set a total budget so allocations can be planned line by line.',
+    guestCount ? `Open the guest list next — ${guestCount} invites take longer than you think.` : 'Build the guest list early — headcount drives catering and seating.',
+  ];
+
+  return {
+    title,
+    eventType,
+    date,
+    time,
+    budget,
+    guestCount,
+    locationHint,
+    vibe: 'warm, well-organized celebration',
+    summary,
+    confidence: date && (budget || guestCount) ? 'medium' : 'low',
+    milestones,
+    budgetLines,
+    suggestions,
+  };
+}
