@@ -10,6 +10,7 @@ import React, {
 import { useEventContext } from './EventContext';
 import { mergeRsvpResponses, rsvpSummaryText } from '../lib/sync/rsvpMerge';
 import { makeId } from '../utils/ids';
+import { MAX_PHOTOS_PER_EVENT, validatePhotoDataUrl } from '../lib/photos/photoModel';
 
 /**
  * Cloud Sync Context — the client half of the cloud-persistence layer
@@ -43,6 +44,7 @@ export const CloudSyncProvider = ({ children }) => {
     events,
     updateEvent,
     restoreCloudEvent,
+    addPhotosForEvent,
     showToast,
   } = useEventContext();
   const eventsRef = useRef(events);
@@ -185,6 +187,7 @@ export const CloudSyncProvider = ({ children }) => {
         const data = await res.json().catch(() => ({}));
         if (!res.ok) return { ok: false, error: data.error || 'Sync failed.' };
         setCloudEvents((prev) => {
+          const prior = prev.find((c) => c.localId === data.localId);
           const next = prev.filter((c) => c.localId !== data.localId);
           next.unshift({
             localId: data.localId,
@@ -193,8 +196,10 @@ export const CloudSyncProvider = ({ children }) => {
             eventDate: /^\d{4}-\d{2}-\d{2}$/.test(event.date || '') ? event.date : null,
             version: data.version,
             updatedAt: data.updatedAt,
-            hasRsvpToken: prev.find((c) => c.localId === data.localId)?.hasRsvpToken || false,
+            hasRsvpToken: prior?.hasRsvpToken || false,
+            hasAlbumToken: prior?.hasAlbumToken || false,
             responseCount: data.responseCount ?? 0,
+            guestPhotoCount: prior?.guestPhotoCount ?? 0,
           });
           return next;
         });
@@ -328,6 +333,113 @@ export const CloudSyncProvider = ({ children }) => {
     [pushEvent]
   );
 
+  /** Sync (if needed) + mint the public guest-photo album link for one event. */
+  const ensureAlbumShare = useCallback(
+    async (event) => {
+      const pushed = await pushEvent(event);
+      if (!pushed.ok) return pushed;
+      try {
+        const res = await authFetch(
+          `/api/sync/events/${encodeURIComponent(event.id)}/share-album`,
+          { method: 'POST' }
+        );
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) return { ok: false, error: data.error || 'Could not create the album link.' };
+        setCloudEvents((prev) =>
+          prev.map((c) => (c.localId === event.id ? { ...c, hasAlbumToken: true } : c))
+        );
+        return { ok: true, url: data.url, token: data.token };
+      } catch {
+        return { ok: false, error: 'Network error while creating the link.' };
+      }
+    },
+    [pushEvent]
+  );
+
+  /**
+   * Collect guest photos from the shared album into this event's photo wall,
+   * then ack (clear) what was imported so the cloud inbox stays lean.
+   *
+   * Import rules mirror the wall's own limits: only wall-safe data URLs are
+   * accepted, and at most (MAX_PHOTOS_PER_EVENT - current) photos come over —
+   * the rest stay in the cloud inbox until space frees up.
+   */
+  const collectGuestPhotos = useCallback(
+    async (event) => {
+      if (!user) return { ok: false, error: 'Sign in to collect guest photos.' };
+      if (!event?.id) return { ok: false, error: 'This event cannot be collected.' };
+      try {
+        const res = await authFetch(
+          `/api/sync/events/${encodeURIComponent(event.id)}/photos`,
+          { cache: 'no-store' }
+        );
+        if (res.status === 401) {
+          setUser(null);
+          return { ok: false, error: 'Your session expired — sign in again.' };
+        }
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          return { ok: false, error: data.error || 'Could not read the guest-photo inbox.' };
+        }
+        const cloud = await res.json();
+        const inbox = Array.isArray(cloud.photos) ? cloud.photos : [];
+        if (inbox.length === 0) {
+          showToast('No new guest photos right now.', 'info');
+          return { ok: true, imported: 0 };
+        }
+
+        const currentCount = Array.isArray(event.photos) ? event.photos.length : 0;
+        const capacity = Math.max(0, MAX_PHOTOS_PER_EVENT - currentCount);
+        const safe = inbox.filter((p) => validatePhotoDataUrl(p?.dataUrl));
+        const importable = safe.slice(0, capacity);
+
+        if (importable.length === 0) {
+          showToast(
+            capacity === 0
+              ? `The wall is full (${MAX_PHOTOS_PER_EVENT} photos) — remove one to make room for guest photos.`
+              : 'None of the guest photos could be validated for this wall.',
+            'error'
+          );
+          return { ok: false, imported: 0, remaining: inbox.length };
+        }
+
+        const metas = importable.map((p) => ({
+          dataUrl: p.dataUrl,
+          caption: [p.caption, p.uploader ? `Shared by ${p.uploader}` : null]
+            .filter(Boolean)
+            .join(' — ')
+            .slice(0, 200),
+          album: 'candids',
+          createdAt: p.createdAt || new Date().toISOString(),
+        }));
+        const added = addPhotosForEvent(event.id, metas, { silent: true });
+
+        if (added > 0) {
+          try {
+            await authFetch(
+              `/api/sync/events/${encodeURIComponent(event.id)}/photos/ack`,
+              { method: 'POST', body: JSON.stringify({ photoIds: importable.map((p) => p.id) }) }
+            );
+          } catch {
+            /* ack is best-effort; re-import is harmless (photos just re-appear) */
+          }
+        }
+
+        const skipped = inbox.length - added;
+        showToast(
+          `Collected ${added} guest photo${added === 1 ? '' : 's'} onto the wall` +
+            (skipped > 0 ? ` — ${skipped} stayed in the inbox (no room or unsafe).` : '.'),
+          'success'
+        );
+        await refreshCloudList();
+        return { ok: true, imported: added, remaining: skipped };
+      } catch {
+        return { ok: false, error: 'Network error while collecting photos.' };
+      }
+    },
+    [user, addPhotosForEvent, refreshCloudList, showToast]
+  );
+
   const syncAllEvents = useCallback(async () => {
     const current = eventsRef.current;
     let okCount = 0;
@@ -373,6 +485,8 @@ export const CloudSyncProvider = ({ children }) => {
       restoreEvent,
       deleteCloudEvent,
       ensureRsvpShare,
+      ensureAlbumShare,
+      collectGuestPhotos,
       syncingIds,
       // modal
       isCloudModalOpen,
@@ -396,6 +510,8 @@ export const CloudSyncProvider = ({ children }) => {
       restoreEvent,
       deleteCloudEvent,
       ensureRsvpShare,
+      ensureAlbumShare,
+      collectGuestPhotos,
       syncingIds,
       isCloudModalOpen,
       openCloudModal,

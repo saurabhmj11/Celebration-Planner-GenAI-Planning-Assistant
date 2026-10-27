@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import dynamic from 'next/dynamic';
 import { EventProvider, useEventContext } from '@/context/EventContext';
 import { CloudSyncProvider, useCloudSync } from '@/context/CloudSyncContext';
@@ -14,6 +14,13 @@ import { VendorFormModal } from '@/components/vendors/VendorFormModal';
 import { CommandPalette } from '@/components/common/CommandPalette';
 import { ErrorBoundary } from '@/components/common/ErrorBoundary';
 import { ServiceWorkerRegistrar } from '@/components/common/ServiceWorkerRegistrar';
+import {
+  buildReminders,
+  visibleReminders,
+  remindersToastText,
+  toDateKey,
+  MUTED_STORAGE_KEY,
+} from '@/lib/reminders/reminderModel';
 
 import { DashboardOverview } from '@/components/dashboard/DashboardOverview';
 import { BudgetPlanner } from '@/components/budget/BudgetPlanner';
@@ -62,7 +69,7 @@ const SkipLink = () => (
 );
 
 const MainAppContent = () => {
-  const { activeEvent, exportEventsData, undo, redo } = useEventContext();
+  const { activeEvent, exportEventsData, undo, redo, showToast } = useEventContext();
   const { openCloudModal } = useCloudSync();
   const [currentTab, setCurrentTab] = useState('dashboard');
 
@@ -94,6 +101,29 @@ const MainAppContent = () => {
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
   }, [undo, redo]);
+
+  // Auto reminder nudge (GAP 8): once per session, surface what needs
+  // attention for the active event. Mutes are respected so a snoozed item
+  // never re-nags within the same day; the bell stays for the full list.
+  const nudgedRef = useRef(false);
+  useEffect(() => {
+    if (nudgedRef.current || !activeEvent?.id) return;
+    nudgedRef.current = true;
+    let muted = {};
+    try {
+      muted = JSON.parse(window.localStorage.getItem(MUTED_STORAGE_KEY) || '{}');
+    } catch {
+      muted = {};
+    }
+    const todayDate = new Date();
+    const built = buildReminders(activeEvent, { today: todayDate });
+    const visible = visibleReminders(built.reminders, muted, toDateKey(todayDate));
+    if (visible.length > 0) {
+      const text = remindersToastText(visible);
+      if (text) showToast(text, 'info');
+    }
+    // Deliberately runs once per mount — the bell recomputes live.
+  }, [activeEvent?.id, showToast]);
 
   // Modal states
   const [isEventModalOpen, setIsEventModalOpen] = useState(false);

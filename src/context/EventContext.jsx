@@ -932,49 +932,72 @@ export const EventProvider = ({ children }) => {
   // ---------------- PHOTO MEMORY WALL ACTIONS ----------------
 
   /**
-   * Bulk-add photo metadata (data URLs already downscaled + validated by
-   * photoService). Enforces the per-event cap so localStorage stays healthy.
+   * Bulk-add photo metadata to a specific event's wall (data URLs already
+   * downscaled + validated upstream). Enforces the per-event cap so
+   * localStorage stays healthy. The active-event `addPhotos` below delegates
+   * here; the cloud collector calls this directly with `silent` so it can
+   * phrase its own summary toast.
    * @returns {number} how many photos were actually added.
    */
-  const addPhotos = useCallback((metas) => {
-    if (!activeEvent || !Array.isArray(metas) || metas.length === 0) return 0;
+  const addPhotosForEvent = useCallback(
+    (eventId, metas, { silent = false } = {}) => {
+      const target = events.find((e) => e.id === eventId);
+      if (!target || !Array.isArray(metas) || metas.length === 0) return 0;
 
-    const valid = metas
-      .map((m) => {
-        const dataUrl = validatePhotoDataUrl(m?.dataUrl);
-        if (!dataUrl) return null;
-        return {
-          id: makeId('photo'),
-          dataUrl,
-          caption: String(m.caption || '').slice(0, 200),
-          album: m.album || 'candids',
-          favorite: Boolean(m.favorite),
-          createdAt: m.createdAt || new Date().toISOString(),
-        };
-      })
-      .filter(Boolean);
+      const valid = metas
+        .map((m) => {
+          const dataUrl = validatePhotoDataUrl(m?.dataUrl);
+          if (!dataUrl) return null;
+          return {
+            id: makeId('photo'),
+            dataUrl,
+            caption: String(m.caption || '').slice(0, 200),
+            album: m.album || 'candids',
+            favorite: Boolean(m.favorite),
+            createdAt: m.createdAt || new Date().toISOString(),
+          };
+        })
+        .filter(Boolean);
 
-    if (valid.length === 0) return 0;
+      if (valid.length === 0) return 0;
 
-    setEvents((prev) =>
-      prev.map((e) => {
-        if (e.id === activeEvent.id) {
-          const room = Math.max(0, MAX_PHOTOS_PER_EVENT - (e.photos?.length || 0));
-          const accepted = valid.slice(0, room);
-          return { ...e, photos: [...(e.photos || []), ...accepted] };
+      const room = Math.max(0, MAX_PHOTOS_PER_EVENT - (target.photos?.length || 0));
+      const accepted = valid.slice(0, room);
+
+      if (accepted.length > 0) {
+        setEvents((prev) =>
+          prev.map((e) => {
+            if (e.id === eventId) {
+              // Re-check room inside the updater so rapid successive calls
+              // (e.g. upload + cloud collect in one tick) can never overfill.
+              const liveRoom = Math.max(0, MAX_PHOTOS_PER_EVENT - (e.photos?.length || 0));
+              const liveAccepted = accepted.slice(0, liveRoom);
+              return liveAccepted.length > 0
+                ? { ...e, photos: [...(e.photos || []), ...liveAccepted] }
+                : e;
+            }
+            return e;
+          })
+        );
+      }
+
+      if (!silent) {
+        if (accepted.length > 0) {
+          showToast(`Added ${accepted.length} photo${accepted.length === 1 ? '' : 's'} to the memory wall! 📸`, 'success');
         }
-        return e;
-      })
-    );
-    const added = Math.min(valid.length, Math.max(0, MAX_PHOTOS_PER_EVENT - (activeEvent.photos?.length || 0)));
-    if (added > 0) {
-      showToast(`Added ${added} photo${added === 1 ? '' : 's'} to the memory wall! 📸`, 'success');
-    }
-    if (valid.length > added) {
-      showToast(`Photo wall is full (${MAX_PHOTOS_PER_EVENT} max) — ${valid.length - added} not added.`, 'info');
-    }
-    return added;
-  }, [activeEvent, showToast]);
+        if (valid.length > accepted.length) {
+          showToast(`Photo wall is full (${MAX_PHOTOS_PER_EVENT} max) — ${valid.length - accepted.length} not added.`, 'info');
+        }
+      }
+      return accepted.length;
+    },
+    [events, showToast]
+  );
+
+  const addPhotos = useCallback(
+    (metas) => addPhotosForEvent(activeEvent?.id, metas),
+    [activeEvent, addPhotosForEvent]
+  );
 
   const updatePhoto = useCallback((photoId, updatedFields) => {
     if (!activeEvent) return;
@@ -1488,6 +1511,7 @@ export const EventProvider = ({ children }) => {
       saveInvitation,
       // Photo memory wall
       addPhotos,
+      addPhotosForEvent,
       updatePhoto,
       deletePhoto,
       // Seating chart
@@ -1566,6 +1590,7 @@ export const EventProvider = ({ children }) => {
       setGuestsRsvp,
       saveInvitation,
       addPhotos,
+      addPhotosForEvent,
       updatePhoto,
       deletePhoto,
       addTable,

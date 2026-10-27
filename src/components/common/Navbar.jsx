@@ -34,6 +34,7 @@ import {
 import { formatShortDate, formatCurrency } from '../../utils/formatters';
 import { useCelebrationMood } from '../../hooks/useCelebrationMood';
 import { ThemeToggle } from './ThemeToggle';
+import { RemindersBell } from './RemindersBell';
 import { useCloudSync } from '../../context/CloudSyncContext';
 
 /**
@@ -536,6 +537,9 @@ export const Navbar = ({ currentTab, setCurrentTab, onOpenNewEvent, onOpenApiKey
             >
               <RotateCcw className="w-4 h-4" aria-hidden="true" />
             </button>
+
+            {/* Auto reminders bell (GAP 8) */}
+            <RemindersBell setCurrentTab={setCurrentTab} />
 
             {/* Light / Dark mode */}
             <ThemeToggle />
