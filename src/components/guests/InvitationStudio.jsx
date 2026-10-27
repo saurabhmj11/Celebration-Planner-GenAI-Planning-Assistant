@@ -1,7 +1,9 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useEventContext } from '../../context/EventContext';
+import { useCloudSync } from '../../context/CloudSyncContext';
 import { aiAssist } from '../../services/aiAssist';
+import QRCode from 'qrcode';
 import { calculateGuestStats, getRsvpUrgency } from '../../utils/calculator';
 import { formatEventDate } from '../../utils/formatters';
 import {
@@ -14,6 +16,11 @@ import {
   CalendarClock,
   RefreshCw,
   Wand2,
+  QrCode,
+  Link2,
+  Globe,
+  LogIn,
+  CheckCircle2,
 } from 'lucide-react';
 
 const TONES = [
@@ -34,6 +41,15 @@ const TONES = [
  */
 export const InvitationStudio = ({ onBackToList }) => {
   const { activeEvent, saveInvitation, showToast } = useEventContext();
+  const {
+    user: cloudUser,
+    isSessionReady,
+    cloudByLocalId,
+    ensureRsvpShare,
+    syncEvent,
+    syncingIds,
+    openCloudModal,
+  } = useCloudSync();
 
   const invitation = activeEvent?.invitation;
 
@@ -48,6 +64,58 @@ export const InvitationStudio = ({ onBackToList }) => {
 
   const stats = useMemo(() => calculateGuestStats(activeEvent?.guests || []), [activeEvent]);
   const urgency = useMemo(() => getRsvpUrgency(rsvpDeadline), [rsvpDeadline]);
+
+  // --- Public RSVP page sharing (cloud) ---
+  const cloudInfo = cloudByLocalId.get(activeEvent?.id);
+  const pendingResponses = cloudInfo?.responseCount || 0;
+  const [shareBusy, setShareBusy] = useState(false);
+  const [shareUrl, setShareUrl] = useState('');
+  const [qrDataUrl, setQrDataUrl] = useState('');
+  const [linkCopied, setLinkCopied] = useState(false);
+
+  useEffect(() => {
+    setShareUrl('');
+    setQrDataUrl('');
+    setLinkCopied(false);
+  }, [activeEvent?.id]);
+
+  const handleCreateLink = async () => {
+    if (shareBusy) return;
+    setShareBusy(true);
+    try {
+      const res = await ensureRsvpShare(activeEvent);
+      if (res.ok) {
+        setShareUrl(res.url);
+        setLinkCopied(false);
+        try {
+          setQrDataUrl(
+            await QRCode.toDataURL(res.url, {
+              width: 220,
+              margin: 1,
+              color: { dark: '#312e81', light: '#ffffff' },
+            })
+          );
+        } catch {
+          setQrDataUrl('');
+        }
+      } else if (res.error) {
+        showToast(res.error, 'error');
+      }
+    } finally {
+      setShareBusy(false);
+    }
+  };
+
+  const handleCopyLink = async () => {
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      setLinkCopied(true);
+      setTimeout(() => setLinkCopied(false), 2400);
+      showToast('RSVP link copied — send it to your guests!', 'success');
+    } catch {
+      showToast('Copy failed — select the link text and copy manually.', 'error');
+    }
+  };
 
   /* Palette for the card — the event's applied theme color wins. */
   const palette = useMemo(() => {
@@ -293,6 +361,131 @@ export const InvitationStudio = ({ onBackToList }) => {
                 back to the list
               </button>
             </p>
+          )}
+        </div>
+
+        {/* Public RSVP page — cloud-backed guest link (GAP 1) */}
+        <div
+          className="rounded-3xl border border-sky-200 bg-gradient-to-br from-sky-50 via-white to-brand-50/60 p-5 space-y-3"
+          aria-labelledby="rsvp-share-title"
+        >
+          <div className="flex items-start justify-between gap-2">
+            <div>
+              <p id="rsvp-share-title" className="text-[11px] font-bold uppercase tracking-wider text-sky-700 flex items-center gap-1.5">
+                <QrCode className="w-3.5 h-3.5" aria-hidden="true" />
+                Public RSVP Page
+              </p>
+              <p className="text-[11px] text-slate-500 mt-1 leading-relaxed">
+                Guests open a link on their phone, find their name, and answer — responses flow
+                into your guest list when you sync.
+              </p>
+            </div>
+            {cloudInfo?.hasRsvpToken && (
+              <span className="shrink-0 inline-flex items-center gap-1 rounded-full bg-emerald-100 border border-emerald-300 px-2 py-0.5 text-[10px] font-extrabold text-emerald-800">
+                <Globe className="w-3 h-3" aria-hidden="true" />
+                Live
+              </span>
+            )}
+          </div>
+
+          {!isSessionReady ? (
+            <div className="h-9 flex items-center text-slate-400 text-xs">
+              <Loader2 className="w-4 h-4 animate-spin mr-2" aria-hidden="true" />
+              Checking cloud sync…
+            </div>
+          ) : !cloudUser ? (
+            <button
+              type="button"
+              onClick={openCloudModal}
+              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 text-xs font-bold text-white bg-gradient-to-r from-sky-600 to-brand-600 hover:from-sky-700 hover:to-brand-700 rounded-xl shadow-md shadow-sky-500/25 transition-all"
+            >
+              <LogIn className="w-4 h-4" aria-hidden="true" />
+              Sign in to share an RSVP link
+            </button>
+          ) : (
+            <div className="space-y-3">
+              {!shareUrl ? (
+                <button
+                  type="button"
+                  onClick={handleCreateLink}
+                  disabled={shareBusy}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-2.5 text-xs font-bold text-white bg-gradient-to-r from-sky-600 to-brand-600 hover:from-sky-700 hover:to-brand-700 rounded-xl shadow-md shadow-sky-500/25 transition-all disabled:opacity-60 disabled:cursor-wait"
+                >
+                  {shareBusy ? (
+                    <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
+                  ) : (
+                    <Link2 className="w-4 h-4" aria-hidden="true" />
+                  )}
+                  {shareBusy
+                    ? 'Syncing & creating your link…'
+                    : cloudInfo?.hasRsvpToken
+                      ? 'Show my RSVP link'
+                      : 'Create public RSVP link'}
+                </button>
+              ) : (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2">
+                    <input
+                      type="text"
+                      readOnly
+                      value={shareUrl}
+                      aria-label="Public RSVP link"
+                      onFocus={(e) => e.target.select()}
+                      className="flex-1 min-w-0 bg-transparent text-[11px] text-slate-600 outline-none"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleCopyLink}
+                      aria-label="Copy the public RSVP link"
+                      className="shrink-0 inline-flex items-center gap-1 h-8 px-2.5 text-[11px] font-bold rounded-lg text-white bg-gradient-to-r from-sky-600 to-brand-600 hover:from-sky-700 hover:to-brand-700 transition-all"
+                    >
+                      {linkCopied ? (
+                        <CheckCircle2 className="w-3.5 h-3.5" aria-hidden="true" />
+                      ) : (
+                        <Copy className="w-3.5 h-3.5" aria-hidden="true" />
+                      )}
+                      {linkCopied ? 'Copied' : 'Copy'}
+                    </button>
+                  </div>
+                  {qrDataUrl && (
+                    <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-3">
+                      <img
+                        src={qrDataUrl}
+                        alt="QR code linking to the public RSVP page"
+                        className="w-20 h-20 rounded-lg border border-slate-100"
+                      />
+                      <p className="text-[11px] text-slate-500 leading-relaxed">
+                        Print this QR on table cards — guests scan, find their name, and RSVP in
+                        seconds. The page shows your <strong>saved</strong> invitation copy.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {pendingResponses > 0 && (
+                <button
+                  type="button"
+                  onClick={() => syncEvent(activeEvent)}
+                  disabled={syncingIds.has(activeEvent.id)}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-2.5 text-xs font-bold text-amber-900 bg-amber-100 border border-amber-300 hover:bg-amber-200 rounded-xl transition-all disabled:opacity-60"
+                >
+                  {syncingIds.has(activeEvent.id) ? (
+                    <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
+                  ) : (
+                    <RefreshCw className="w-4 h-4" aria-hidden="true" />
+                  )}
+                  Import {pendingResponses} new response{pendingResponses === 1 ? '' : 's'} into the guest list
+                </button>
+              )}
+
+              {rsvpDeadline && (
+                <p className="text-[10px] text-slate-400 leading-relaxed">
+                  RSVP deadline {rsvpDeadline}: the public page stops accepting answers the day
+                  after it passes. Save the invitation before sharing so guests see the final copy.
+                </p>
+              )}
+            </div>
           )}
         </div>
       </div>

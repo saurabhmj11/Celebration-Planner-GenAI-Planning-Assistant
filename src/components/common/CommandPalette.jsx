@@ -4,6 +4,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Command } from 'cmdk';
 import { useTheme } from 'next-themes';
 import { useEventContext } from '../../context/EventContext';
+import { useCloudSync } from '../../context/CloudSyncContext';
 import {
   PALETTE_NAV_ITEMS,
   buildActionItems,
@@ -60,6 +61,7 @@ export const CommandPalette = ({
   onOpenAddVendor,
   onOpenApiKey,
   onOpenCurrency,
+  onOpenCloudSync,
 }) => {
   const {
     events,
@@ -74,6 +76,7 @@ export const CommandPalette = ({
   } = useEventContext();
 
   const { resolvedTheme, setTheme } = useTheme();
+  const { user: cloudUser, pendingResponses } = useCloudSync();
   const [query, setQuery] = useState('');
   const [mounted, setMounted] = useState(false);
   const inputRef = useRef(null);
@@ -97,6 +100,8 @@ export const CommandPalette = ({
         canUndo: historyMeta.canUndo,
         canRedo: historyMeta.canRedo,
         currencyCode: currencyConfig.code,
+        cloudUser,
+        pendingResponses,
       }),
       ...PALETTE_NAV_ITEMS,
     ];
@@ -104,7 +109,7 @@ export const CommandPalette = ({
     if (!query.trim()) return [...base, ...eventItems.slice(0, IDLE_EVENT_CAP)];
     // Deep search: fold the active event's rows in too.
     return [...base, ...eventItems, ...buildDataItems(activeEvent)];
-  }, [events, activeEvent, activeEventId, query, mounted, resolvedTheme, historyMeta, currencyConfig]);
+  }, [events, activeEvent, activeEventId, query, mounted, resolvedTheme, historyMeta, currencyConfig, cloudUser, pendingResponses]);
 
   const visible = useMemo(
     () => filterPaletteItems(allItems, query, { limitPerGroup: GROUP_RESULT_CAP }),
@@ -142,6 +147,9 @@ export const CommandPalette = ({
         break;
       case 'currency':
         onOpenCurrency?.();
+        break;
+      case 'cloudSync':
+        onOpenCloudSync?.();
         break;
       case 'toggleTheme':
         setTheme(resolvedTheme === 'dark' ? 'light' : 'dark');

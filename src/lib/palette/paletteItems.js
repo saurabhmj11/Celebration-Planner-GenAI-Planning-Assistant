@@ -11,7 +11,8 @@
  *     action: { type: 'navigate', tab }
  *            | { type: 'selectEvent', eventId }
  *            | { type: 'newEvent' | 'addExpense' | 'addTask' | 'addVendor'
- *                | 'toggleTheme' | 'exportBackup' | 'aiSettings' | 'printMaster' }
+ *                | 'toggleTheme' | 'exportBackup' | 'aiSettings' | 'printMaster'
+ *                | 'cloudSync' }
  */
 
 import { formatCurrency, formatShortDate } from '@/utils/formatters';
@@ -62,13 +63,25 @@ const rsvpShortOf = (id) => {
  * `canUndo` / `canRedo` annotate the history actions; `currencyCode` shows
  * the active display currency in the currency action's hint.
  */
-export function buildActionItems({ resolvedTheme, canUndo = false, canRedo = false, currencyCode = 'USD' } = {}) {
+export function buildActionItems({ resolvedTheme, canUndo = false, canRedo = false, currencyCode = 'USD', cloudUser = null, pendingResponses = 0 } = {}) {
   const toDark = resolvedTheme !== 'dark';
   return [
     { id: 'act-new-event', group: 'Actions', label: 'New Celebration', keywords: 'new event create add celebration party', action: { type: 'newEvent' } },
     { id: 'act-add-expense', group: 'Actions', label: 'Add Expense', keywords: 'new expense budget cost add', action: { type: 'addExpense' } },
     { id: 'act-add-task', group: 'Actions', label: 'Add Task', keywords: 'new task todo milestone add', action: { type: 'addTask' } },
     { id: 'act-add-vendor', group: 'Actions', label: 'Add Vendor', keywords: 'new vendor supplier contact add', action: { type: 'addVendor' } },
+    {
+      id: 'act-cloud-sync',
+      group: 'Actions',
+      label: 'Cloud Sync',
+      hint: cloudUser
+        ? pendingResponses > 0
+          ? `Signed in as ${cloudUser.email} — ${pendingResponses} new RSVP response${pendingResponses === 1 ? '' : 's'} waiting`
+          : `Signed in as ${cloudUser.email}`
+        : 'Sign in — sync events across devices, share RSVP links',
+      keywords: 'cloud sync account login sign in register device backup rsvp share link online',
+      action: { type: 'cloudSync' },
+    },
     {
       id: 'act-undo',
       group: 'Actions',

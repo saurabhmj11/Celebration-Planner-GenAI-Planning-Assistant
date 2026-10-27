@@ -202,7 +202,7 @@ export const EventProvider = ({ children }) => {
     return newEvent;
   }, [setActiveEventId, showToast, triggerConfetti]);
 
-  const updateEvent = useCallback((id, updatedFields) => {
+  const updateEvent = useCallback((id, updatedFields, opts = {}) => {
     setEvents((prev) =>
       prev.map((e) => {
         if (e.id === id) {
@@ -216,7 +216,7 @@ export const EventProvider = ({ children }) => {
         return e;
       })
     );
-    showToast('Event details updated successfully!', 'success');
+    if (!opts.silent) showToast('Event details updated successfully!', 'success');
   }, [showToast]);
 
   const deleteEvent = useCallback((id) => {
@@ -1403,6 +1403,25 @@ export const EventProvider = ({ children }) => {
     [showToast, triggerConfetti]
   );
 
+  /**
+   * Cloud restore: add ONE event (from a cloud snapshot) preserving its id
+   * so future pushes re-link to the same cloud row. The caller resolves id
+   * collisions beforehand; the updater guard keeps this StrictMode-idempotent.
+   */
+  const restoreCloudEvent = useCallback(
+    (eventData) => {
+      const healed = sanitizeEvents([eventData])[0];
+      if (!healed) return null;
+      setEvents((prev) =>
+        prev.some((e) => e.id === healed.id) ? prev : [...prev, healed]
+      );
+      setActiveEventId(healed.id);
+      showToast(`Restored "${healed.title}" from the cloud.`, 'success');
+      return healed;
+    },
+    [setActiveEventId, showToast]
+  );
+
   // Context value — memoized so consumers only re-render when state changes.
   const value = useMemo(
     () => ({
@@ -1430,6 +1449,7 @@ export const EventProvider = ({ children }) => {
       resetAllToSampleData,
       exportEventsData,
       importEventsData,
+      restoreCloudEvent,
       // Budget & Expense CRUD
       addExpense,
       updateExpense,
@@ -1567,6 +1587,7 @@ export const EventProvider = ({ children }) => {
       applyAgentRunSheet,
       logAgentRun,
       applyThemeToEvent,
+      restoreCloudEvent,
     ]
   );
 

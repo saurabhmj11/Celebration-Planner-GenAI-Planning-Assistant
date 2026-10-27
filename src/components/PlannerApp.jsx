@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import dynamic from 'next/dynamic';
 import { EventProvider, useEventContext } from '@/context/EventContext';
+import { CloudSyncProvider, useCloudSync } from '@/context/CloudSyncContext';
 import { Navbar } from '@/components/common/Navbar';
 import { NotificationToast } from '@/components/common/NotificationToast';
 import { ApiKeyModal } from '@/components/common/ApiKeyModal';
@@ -28,6 +29,7 @@ import { AgentForcePanel } from '@/components/force/AgentForcePanel';
 import { ThemeIdeaStudio } from '@/components/ai/ThemeIdeaStudio';
 import { AssistantChat } from '@/components/ai/AssistantChat';
 import { CurrencyModal } from '@/components/common/CurrencyModal';
+import { CloudSyncModal } from '@/components/common/CloudSyncModal';
 import { Heart } from 'lucide-react';
 
 // The print summary is a heavy, rarely-visited surface — load it lazily.
@@ -61,6 +63,7 @@ const SkipLink = () => (
 
 const MainAppContent = () => {
   const { activeEvent, exportEventsData, undo, redo } = useEventContext();
+  const { openCloudModal } = useCloudSync();
   const [currentTab, setCurrentTab] = useState('dashboard');
 
   // Global ⌘K / Ctrl+K command palette
@@ -299,6 +302,9 @@ const MainAppContent = () => {
         onClose={() => setIsCurrencyModalOpen(false)}
       />
 
+      {/* Cloud sync: account, per-event sync, RSVP-link sharing */}
+      <CloudSyncModal />
+
       {/* ⌘K / Ctrl+K command palette — sits above everything */}
       <CommandPalette
         open={isPaletteOpen}
@@ -310,6 +316,7 @@ const MainAppContent = () => {
         onOpenAddVendor={handleOpenAddVendor}
         onOpenApiKey={() => setIsApiKeyModalOpen(true)}
         onOpenCurrency={() => setIsCurrencyModalOpen(true)}
+        onOpenCloudSync={openCloudModal}
       />
 
       {/* Floating context-aware AI assistant (all tabs) */}
@@ -327,7 +334,9 @@ const MainAppContent = () => {
 export default function PlannerApp() {
   return (
     <EventProvider>
-      <MainAppContent />
+      <CloudSyncProvider>
+        <MainAppContent />
+      </CloudSyncProvider>
     </EventProvider>
   );
 }

@@ -29,10 +29,12 @@ import {
   Undo2,
   Redo2,
   Coins,
+  Cloud,
 } from 'lucide-react';
 import { formatShortDate, formatCurrency } from '../../utils/formatters';
 import { useCelebrationMood } from '../../hooks/useCelebrationMood';
 import { ThemeToggle } from './ThemeToggle';
+import { useCloudSync } from '../../context/CloudSyncContext';
 
 /**
  * Application top bar — two-tier layout.
@@ -47,6 +49,7 @@ import { ThemeToggle } from './ThemeToggle';
  * clicks landing on the wrong control. A second row guarantees separation at any width.
  */
 export const Navbar = ({ currentTab, setCurrentTab, onOpenNewEvent, onOpenApiKey, onEditCurrentEvent, onOpenPalette, onOpenCurrency }) => {
+  const { openCloudModal, user, pendingResponses, isSessionReady } = useCloudSync();
   const {
     events,
     activeEventId,
@@ -453,6 +456,36 @@ export const Navbar = ({ currentTab, setCurrentTab, onOpenNewEvent, onOpenApiKey
             >
               <Coins className="w-3.5 h-3.5 text-emerald-600" aria-hidden="true" />
               <span>{currencyConfig.code}</span>
+            </button>
+
+            {/* Cloud Sync — cross-device persistence + RSVP sharing */}
+            <button
+              type="button"
+              onClick={openCloudModal}
+              title="Cloud Sync — your events on every device, plus public RSVP links"
+              aria-label={`Cloud sync${pendingResponses > 0 ? ` — ${pendingResponses} new RSVP responses waiting` : user ? ' — signed in' : ' — sign in to sync across devices'}`}
+              className={`relative flex items-center gap-1.5 h-9 px-2.5 rounded-xl text-xs font-semibold border transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 ${
+                user
+                  ? 'bg-sky-50 text-sky-800 border-sky-200 hover:bg-sky-100'
+                  : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'
+              }`}
+            >
+              <Cloud className="w-3.5 h-3.5 text-sky-600" aria-hidden="true" />
+              <span className="hidden xl:inline">Cloud</span>
+              {isSessionReady && user && (
+                <span
+                  className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-sm shadow-emerald-400"
+                  aria-hidden="true"
+                />
+              )}
+              {pendingResponses > 0 && (
+                <span
+                  className="absolute -top-1.5 -right-1.5 min-w-4 h-4 px-1 flex items-center justify-center rounded-full bg-amber-500 text-white text-[9px] font-extrabold shadow"
+                  aria-hidden="true"
+                >
+                  {pendingResponses > 9 ? '9+' : pendingResponses}
+                </span>
+              )}
             </button>
 
             {/* AI Engine Status */}

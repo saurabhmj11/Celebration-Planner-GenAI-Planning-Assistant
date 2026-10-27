@@ -65,14 +65,28 @@ describe('PALETTE_NAV_ITEMS', () => {
 });
 
 describe('buildActionItems', () => {
-  test('exposes the 11 quick actions with stable ids', () => {
+  test('exposes the 12 quick actions with stable ids', () => {
     const items = buildActionItems({ resolvedTheme: 'light' });
     expect(items.map((i) => i.id)).toEqual([
       'act-new-event', 'act-add-expense', 'act-add-task', 'act-add-vendor',
-      'act-undo', 'act-redo', 'act-currency',
+      'act-cloud-sync', 'act-undo', 'act-redo', 'act-currency',
       'act-toggle-theme', 'act-export-backup', 'act-ai-settings', 'act-print-master',
     ]);
     expect(items.every((i) => i.group === 'Actions')).toBe(true);
+  });
+
+  test('cloud sync action reflects the session and pending responses', () => {
+    const signedOut = buildActionItems({ resolvedTheme: 'light' });
+    expect(signedOut.find((i) => i.id === 'act-cloud-sync')?.hint).toContain('Sign in');
+    expect(signedOut.find((i) => i.id === 'act-cloud-sync')?.action).toEqual({ type: 'cloudSync' });
+
+    const signedIn = buildActionItems({
+      resolvedTheme: 'light',
+      cloudUser: { email: 'host@example.com' },
+      pendingResponses: 2,
+    });
+    expect(signedIn.find((i) => i.id === 'act-cloud-sync')?.hint).toContain('host@example.com');
+    expect(signedIn.find((i) => i.id === 'act-cloud-sync')?.hint).toContain('2 new RSVP responses');
   });
 
   test('history and currency actions reflect availability and active currency', () => {
