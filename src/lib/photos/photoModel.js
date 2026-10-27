@@ -63,9 +63,19 @@ export function validatePhotoDataUrl(dataUrl) {
   if (dataUrl.length > MAX_PHOTO_DATAURL_CHARS) return null;
 
   if (mime === 'svg+xml') {
-    const body = dataUrl.toLowerCase();
-    for (const bad of SVG_DENYLIST) {
-      if (body.includes(bad)) return null;
+    // Scan BOTH the raw and the percent-decoded forms: browsers decode %xx
+    // when parsing the data URL, so an encoded "onload%3D" executes as
+    // "onload=" — scanning only the raw string would miss it.
+    const bodies = [dataUrl.toLowerCase()];
+    try {
+      bodies.push(decodeURIComponent(dataUrl).toLowerCase());
+    } catch {
+      // Malformed percent-encoding — the raw form is still scanned.
+    }
+    for (const body of bodies) {
+      for (const bad of SVG_DENYLIST) {
+        if (body.includes(bad)) return null;
+      }
     }
   }
 

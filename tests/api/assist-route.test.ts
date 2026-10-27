@@ -272,6 +272,70 @@ describe("POST /api/ai/assist — happy paths", () => {
     expect(userPrompt).toContain("User: budget?");
   });
 
+  test("invitation-copy returns guest-facing invitation wording", async () => {
+    state.responses = [
+      {
+        model: "mock-glm",
+        content: fenced({
+          headline: "You are invited to Marcus's 30th",
+          message: "The rooftop goes full 80s — arcade cabinets, neon lasers, and a synthwave DJ. Kindly RSVP by 2026-11-30.",
+          signOff: "Player One: Marcus",
+        }),
+      },
+    ];
+
+    const res = await POST(
+      makeRequest({
+        task: "invitation-copy",
+        payload: {
+          eventType: "birthday",
+          eventTitle: "Marcus's 30th Neon Rooftop Party",
+          hostName: "Marcus",
+          eventDate: "2026-12-14",
+          eventTime: "20:00",
+          location: "The Velvet Sky Lounge",
+          guestCount: 55,
+          tone: "playful",
+          themeName: "Retro Neon Synthwave",
+          rsvpDeadline: "2026-11-30",
+        },
+      })
+    );
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.task).toBe("invitation-copy");
+    expect(body.data.headline).toContain("Marcus");
+    expect(body.data.message).toContain("RSVP");
+    expect(body.data.signOff).toContain("Marcus");
+    // The prompt is grounded in the real event facts.
+    const userPrompt = state.calls[0][1].content;
+    expect(userPrompt).toContain("playful");
+    expect(userPrompt).toContain("2026-11-30");
+    expect(userPrompt).toContain("Retro Neon Synthwave");
+    const systemPrompt = state.calls[0][0].content;
+    expect(systemPrompt).toContain("invitation wording");
+  });
+
+  test("invitation-copy defaults headline and sign-off when the model omits them", async () => {
+    state.responses = [
+      { content: JSON.stringify({ message: "Please come celebrate with us under the festoon lights." }) },
+    ];
+
+    const res = await POST(
+      makeRequest({
+        task: "invitation-copy",
+        payload: { eventType: "wedding", eventTitle: "Vineyard Vows" },
+      })
+    );
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.data.headline).toBe("You are invited to a celebration");
+    expect(body.data.signOff).toBe("With love & celebration");
+    expect(body.data.message).toContain("festoon");
+  });
+
   test("venue-recommend enriches the shortlist and drops hallucinated ids", async () => {
     state.responses = [
       {

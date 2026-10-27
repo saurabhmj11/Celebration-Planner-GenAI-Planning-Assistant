@@ -1,4 +1,4 @@
-import { Wallet, Clock, Users, Sparkles, MapPinned, CalendarClock } from 'lucide-react';
+import { Wallet, Clock, Users, Sparkles, MapPinned, CalendarClock, UserPlus, Images } from 'lucide-react';
 
 export const QuickActionGrid = ({
   onAddExpense,
@@ -7,6 +7,8 @@ export const QuickActionGrid = ({
   onOpenAiStudio,
   onFindVenue,
   onEditEvent,
+  onManageGuests,
+  onSharePhotos,
 }) => {
   const actions = [
     {
@@ -50,6 +52,22 @@ export const QuickActionGrid = ({
       action: onOpenAiStudio,
     },
     {
+      label: 'Invite Guests',
+      description: 'Guest list, RSVPs & AI invitation cards',
+      icon: UserPlus,
+      color: 'from-emerald-600 to-teal-600 text-emerald-600 bg-emerald-50 hover:bg-emerald-100',
+      badge: 'RSVP',
+      action: onManageGuests,
+    },
+    {
+      label: 'Photo Wall',
+      description: 'Upload & share celebration memories',
+      icon: Images,
+      color: 'from-fuchsia-500 to-rose-500 text-fuchsia-600 bg-fuchsia-50 hover:bg-fuchsia-100',
+      badge: 'Share',
+      action: onSharePhotos,
+    },
+    {
       label: 'AI Venue Finder',
       description: 'Ranked venues + map, photos & booking',
       icon: MapPinned,
@@ -68,7 +86,7 @@ export const QuickActionGrid = ({
         </div>
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-3 xl:grid-cols-6 gap-3 sm:gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
         {actions.map((act, index) => {
           const Icon = act.icon;
           return (

@@ -17,6 +17,16 @@ export const EventProvider = ({ children }) => {
   const [toast, setToast] = useState(null);
   const quotaWarnedRef = useRef(false);
 
+  // Show Toast — declared before the effects that use it (React Compiler
+  // flags access-before-declaration inside effect closures).
+  const showToast = useCallback((message, type = 'success') => {
+    const id = Date.now();
+    setToast({ id, message, type });
+    setTimeout(() => {
+      setToast((curr) => (curr?.id === id ? null : curr));
+    }, 3800);
+  }, []);
+
   // Sync events to localStorage — surfacing quota failures (a full localStorage
   // would otherwise silently drop the user's latest changes) exactly once
   // per failure streak instead of spamming a toast on every keystroke.
@@ -30,15 +40,8 @@ export const EventProvider = ({ children }) => {
     } else {
       quotaWarnedRef.current = false;
     }
-    // showToast is a stable useCallback; eslint exhaustive-deps on purpose.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // Deliberately syncs on [events] only — showToast is a stable useCallback.
   }, [events]);
-
-  // Sync active event ID
-  const setActiveEventId = useCallback((id) => {
-    setActiveEventIdState(id);
-    storageService.saveActiveEventId(id);
-  }, []);
 
   // Save API key
   const setApiKey = useCallback((key) => {
@@ -46,13 +49,10 @@ export const EventProvider = ({ children }) => {
     storageService.saveApiKey(key);
   }, []);
 
-  // Show Toast
-  const showToast = useCallback((message, type = 'success') => {
-    const id = Date.now();
-    setToast({ id, message, type });
-    setTimeout(() => {
-      setToast((curr) => (curr?.id === id ? null : curr));
-    }, 3800);
+  // Sync active event ID
+  const setActiveEventId = useCallback((id) => {
+    setActiveEventIdState(id);
+    storageService.saveActiveEventId(id);
   }, []);
 
   // Fire celebratory confetti!
@@ -572,6 +572,26 @@ export const EventProvider = ({ children }) => {
     showToast(`Removed ${ids.length} guest${ids.length === 1 ? '' : 's'} from the list.`, 'info');
   }, [activeEvent, showToast]);
 
+  /** Bulk-set the RSVP status of selected guests in one update. */
+  const setGuestsRsvp = useCallback((ids, rsvp) => {
+    if (!activeEvent || !Array.isArray(ids) || ids.length === 0) return;
+    const valid = ['invited', 'attending', 'maybe', 'declined'].includes(rsvp) ? rsvp : null;
+    if (!valid) return;
+    const targets = new Set(ids);
+    setEvents((prev) =>
+      prev.map((e) => {
+        if (e.id === activeEvent.id) {
+          return {
+            ...e,
+            guests: (e.guests || []).map((g) => (targets.has(g.id) ? { ...g, rsvp: valid } : g)),
+          };
+        }
+        return e;
+      })
+    );
+    showToast(`Marked ${ids.length} guest${ids.length === 1 ? '' : 's'} as "${valid}".`, 'info');
+  }, [activeEvent, showToast]);
+
   // ---------------- INVITATION ACTIONS ----------------
 
   /** Save (or replace) the AI-generated invitation copy for the event. */
@@ -768,6 +788,7 @@ export const EventProvider = ({ children }) => {
       updateGuest,
       deleteGuest,
       deleteGuests,
+      setGuestsRsvp,
       // Invitation
       saveInvitation,
       // Photo memory wall
@@ -812,6 +833,7 @@ export const EventProvider = ({ children }) => {
       updateGuest,
       deleteGuest,
       deleteGuests,
+      setGuestsRsvp,
       saveInvitation,
       addPhotos,
       updatePhoto,

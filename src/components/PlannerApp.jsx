@@ -16,6 +16,8 @@ import { BudgetPlanner } from '@/components/budget/BudgetPlanner';
 import { TimelineView } from '@/components/timeline/TimelineView';
 import { VendorChecklist } from '@/components/vendors/VendorChecklist';
 import { VenueFinder } from '@/components/venues/VenueFinder';
+import { GuestManager } from '@/components/guests/GuestManager';
+import { PhotoWall } from '@/components/photos/PhotoWall';
 import { ThemeIdeaStudio } from '@/components/ai/ThemeIdeaStudio';
 import { AssistantChat } from '@/components/ai/AssistantChat';
 import { Heart } from 'lucide-react';
@@ -153,6 +155,10 @@ const MainAppContent = () => {
         )}
 
         {currentTab === 'venues' && <VenueFinder />}
+
+        {currentTab === 'guests' && <GuestManager />}
+
+        {currentTab === 'photos' && <PhotoWall />}
 
         {currentTab === 'vendors' && (
           <VendorChecklist

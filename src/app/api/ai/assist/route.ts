@@ -20,8 +20,8 @@ import { formatZodErrors } from "@/lib/validation/schemas";
  *
  * POST /api/ai/assist
  * Body: { task: 'budget-plan' | 'timeline-plan' | 'vendor-plan' |
- *              'vendor-inquiry' | 'venue-recommend' | 'plan-review' |
- *              'assistant-chat',
+ *              'vendor-inquiry' | 'venue-recommend' | 'invitation-copy' |
+ *              'plan-review' | 'assistant-chat',
  *         payload: {...} }
  *
  * One hardened pipeline serves every AI capability in the app:

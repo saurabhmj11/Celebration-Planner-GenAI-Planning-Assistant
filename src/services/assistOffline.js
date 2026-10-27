@@ -508,6 +508,80 @@ export function offlineVenueRecommend({
 }
 
 /* ------------------------------------------------------------------ */
+/* 6c. Invitation copy (offline tier)                                 */
+/* ------------------------------------------------------------------ */
+
+const TONE_OPENERS = {
+  warm: 'Dear friends and family,',
+  formal: 'You are cordially invited.',
+  playful: 'Guess what? You made the VIP list!',
+  elegant: 'With great joy, we invite you.',
+};
+
+const TONE_SIGNOFFS = {
+  warm: 'With love and gratitude',
+  formal: 'Respectfully yours',
+  playful: 'See you on the dance floor',
+  elegant: 'With warmest regards',
+};
+
+/**
+ * Smart Offline invitation writer — tone-aware templates that weave the real
+ * event facts (date, venue, theme, RSVP deadline) into guest-facing copy so
+ * the Invitation Studio is never a dead panel.
+ * @returns {{ headline: string, message: string, signOff: string }}
+ */
+export function offlineInvitationCopy({
+  eventType = 'other',
+  eventTitle = '',
+  hostName = '',
+  eventDate = '',
+  eventTime = '',
+  location = '',
+  guestCount,
+  tone = 'warm',
+  themeName = '',
+  rsvpDeadline = '',
+} = {}) {
+  const label = EVENT_LABELS[eventType] || EVENT_LABELS.other;
+  const title = eventTitle || `our ${label}`;
+  const host = hostName || 'We';
+  const opener = TONE_OPENERS[tone] || TONE_OPENERS.warm;
+  const signOff = TONE_SIGNOFFS[tone] || TONE_SIGNOFFS.warm;
+
+  const whenParts = [];
+  if (eventDate) whenParts.push(eventDate);
+  if (eventTime) whenParts.push(eventTime);
+  const whenLine = whenParts.length
+    ? `Join us ${whenParts.join(' at ')}`
+    : 'Join us on a date to be announced shortly';
+
+  const lines = [
+    `${opener} ${host === 'We' ? 'We could not imagine this day without you.' : `${host} could not imagine this day without you.`}`,
+    whenLine,
+    location ? `at ${location}.` : '— the venue details follow with your confirmation.',
+    `${host === 'We' ? 'We are' : `${host} is`} hosting ${title}${guestCount ? ` for about ${guestCount} of our favorite people` : ''}${
+      themeName ? `, wrapped in the spirit of "${themeName}"` : ''
+    }.`,
+    'Come for the toasts, stay for the memories — it simply will not be the same without you there.',
+    rsvpDeadline ? `Kindly let ${host === 'We' ? 'us' : host} know if you can make it by ${rsvpDeadline}.` : 'Kindly reply to let us know if you can join.',
+  ];
+
+  const headlineMap = {
+    warm: `You are warmly invited: ${title}`,
+    formal: `Requesting the pleasure of your company: ${title}`,
+    playful: `You in? ${title} needs you there!`,
+    elegant: `An invitation to ${title}`,
+  };
+
+  return {
+    headline: (headlineMap[tone] || headlineMap.warm).slice(0, 90),
+    message: lines.join(' ').replace(/\s+/g, ' ').trim(),
+    signOff: host === 'We' ? signOff : `${signOff}, ${host}`,
+  };
+}
+
+/* ------------------------------------------------------------------ */
 /* 7. Assistant chat (offline tier)                                   */
 /* ------------------------------------------------------------------ */
 

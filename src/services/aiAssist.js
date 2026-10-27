@@ -14,6 +14,7 @@
 import {
   offlineAssistantChat,
   offlineBudgetPlan,
+  offlineInvitationCopy,
   offlinePlanReview,
   offlineTimelinePlan,
   offlineVenueRecommend,
@@ -95,6 +96,10 @@ export const aiAssist = {
 
   venueRecommend(payload) {
     return runTask('venue-recommend', payload, offlineVenueRecommend);
+  },
+
+  invitationCopy(payload) {
+    return runTask('invitation-copy', payload, offlineInvitationCopy);
   },
 
   planReview(payload) {

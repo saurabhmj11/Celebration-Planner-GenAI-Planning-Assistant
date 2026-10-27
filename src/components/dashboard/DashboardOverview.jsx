@@ -101,6 +101,8 @@ const DashboardOverviewComponent = ({
         onAddVendor={onOpenVendorModal}
         onOpenAiStudio={() => onNavigate('ai')}
         onFindVenue={() => onNavigate('venues')}
+        onManageGuests={() => onNavigate('guests')}
+        onSharePhotos={() => onNavigate('photos')}
         onOpenPrint={() => onNavigate('print')}
         onEditEvent={onEditEvent}
       />

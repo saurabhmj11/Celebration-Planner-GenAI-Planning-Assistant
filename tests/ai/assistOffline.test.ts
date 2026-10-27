@@ -10,6 +10,7 @@ import { describe, expect, test } from "bun:test";
 import {
   offlineAssistantChat,
   offlineBudgetPlan,
+  offlineInvitationCopy,
   offlinePlanReview,
   offlineTimelinePlan,
   offlineVenueRecommend,
@@ -187,6 +188,64 @@ describe("offlinePlanReview", () => {
     expect(review.score).toBeLessThanOrEqual(100);
     expect(review.nextActions.length).toBeGreaterThanOrEqual(2);
     expect(review.strengths.length).toBeGreaterThan(0);
+  });
+});
+
+describe("offlineInvitationCopy", () => {
+  test("weaves the real event facts into every part of the copy", () => {
+    const copy = offlineInvitationCopy({
+      eventType: "wedding",
+      eventTitle: "Sophia & Liam's Vineyard Wedding",
+      hostName: "Sophia & Liam",
+      eventDate: "2026-11-21",
+      eventTime: "16:00",
+      location: "Vista Winery Terrace",
+      guestCount: 120,
+      tone: "formal",
+      themeName: "Rustic Tuscan Romance",
+      rsvpDeadline: "2026-11-01",
+    });
+
+    expect(copy.headline).toContain("Sophia & Liam's Vineyard Wedding");
+    expect(copy.message).toContain("2026-11-21");
+    expect(copy.message).toContain("16:00");
+    expect(copy.message).toContain("Vista Winery Terrace");
+    expect(copy.message).toContain("120");
+    expect(copy.message).toContain("Rustic Tuscan Romance");
+    expect(copy.message).toContain("2026-11-01");
+    expect(copy.signOff).toContain("Sophia & Liam");
+  });
+
+  test("each tone produces distinct headline and body copy", () => {
+    const copies = ["warm", "formal", "playful", "elegant"].map((tone) =>
+      offlineInvitationCopy({ tone, eventTitle: "The Big Bash" })
+    );
+    expect(new Set(copies.map((c) => c.headline)).size).toBe(4);
+    expect(new Set(copies.map((c) => c.message)).size).toBe(4);
+    expect(copies[1].message).toContain("cordially"); // formal opener
+    expect(copies[2].message).toContain("VIP list"); // playful opener
+    expect(copies[2].headline).toContain("needs you there");
+  });
+
+  test("defaults safely with an empty payload", () => {
+    const copy = offlineInvitationCopy();
+    expect(copy.headline.length).toBeGreaterThan(5);
+    expect(copy.message).toContain("celebration");
+    expect(copy.message).toContain("date to be announced");
+    expect(copy.signOff).toContain("love");
+  });
+
+  test("unknown tone falls back to the warm voice", () => {
+    const copy = offlineInvitationCopy({ tone: "meme", eventTitle: "X" });
+    expect(copy.message).toContain("Dear friends and family");
+  });
+
+  test("headlines stay under the 90-char card cap", () => {
+    const copy = offlineInvitationCopy({
+      tone: "formal",
+      eventTitle: "An Extremely Long And Elaborate Celebration Title That Goes On Far Longer Than Any Headline Should Ever Need To Be",
+    });
+    expect(copy.headline.length).toBeLessThanOrEqual(90);
   });
 });
 

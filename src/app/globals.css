@@ -288,6 +288,11 @@
   background-size: 200% 100%;
 }
 
+/* The invitation print portal is invisible on screen at all times. */
+.invitation-print-portal {
+  display: none !important;
+}
+
 /* Print Friendly formatting */
 @media print {
   .no-print {
@@ -299,6 +304,18 @@
   body {
     background: white !important;
     color: black !important;
+  }
+
+  /* Printable invitation card: when printing from the Invitation Studio,
+     hide the whole app and show ONLY the styled card portal. */
+  body.printing-invitation > * {
+    display: none !important;
+  }
+  body.printing-invitation > .invitation-print-portal {
+    display: block !important;
+  }
+  body.printing-invitation .invitation-card-page {
+    display: flex !important;
   }
 }
 /* hmr-nudge 1793019766 */

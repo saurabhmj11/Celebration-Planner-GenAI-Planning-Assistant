@@ -1,9 +1,10 @@
 import React, { memo } from 'react';
-import { DollarSign, CheckCircle2, Users, Building2 } from 'lucide-react';
+import { DollarSign, CheckCircle2, UsersRound, Building2 } from 'lucide-react';
 import {
   calculateBudgetTotals,
   calculateTimelineStats,
   calculateVendorStats,
+  calculateGuestStats,
 } from '../../utils/calculator';
 import { formatCurrency } from '../../utils/formatters';
 import { StatusBadge } from '../common/StatusBadge';
@@ -87,6 +88,10 @@ const StatCardsComponent = ({ event, onNavigate }) => {
   const { totalTasks, completedTasks, progressPct: taskPct } = calculateTimelineStats(event.tasks);
   const { totalVendors, bookedCount: bookedVendors } = calculateVendorStats(event.vendors);
 
+  const guestStats = calculateGuestStats(event.guests);
+  const costPerAttending =
+    guestStats.attendingHeadcount > 0 ? totalAllocated / guestStats.attendingHeadcount : costPerGuest;
+
   const vendorPct = totalVendors > 0 ? Math.round((bookedVendors / totalVendors) * 100) : 0;
 
   return (
@@ -151,17 +156,25 @@ const StatCardsComponent = ({ event, onNavigate }) => {
         accentSoft={mood.accentSoft}
       />
 
-      {/* 4. Guests & Per-Guest Investment */}
+      {/* 4. Live Headcount & Per-Seat Investment — RSVPs flow into the budget */}
       <StatCard
-        onClick={() => onNavigate('budget')}
-        ariaLabel={`Guest count ${event.guestCount || 0}, cost per guest ${formatCurrency(costPerGuest)}. Open budget planner.`}
-        icon={<Users className="w-5 h-5" />}
-        badge={<StatusBadge variant="neutral">{formatCurrency(costPerGuest)} / Guest</StatusBadge>}
-        value={String(event.guestCount || 0)}
-        sublabel="attendees"
-        label="Guest Count"
-        caption={<>Allocated: {formatCurrency(totalAllocated)}</>}
-        progress={100}
+        onClick={() => onNavigate('guests')}
+        ariaLabel={`Live headcount ${guestStats.attendingHeadcount} of ${guestStats.totalGuests} guests confirmed, ${guestStats.pending} awaiting reply, cost per attending seat ${formatCurrency(costPerAttending)}. Open guest list.`}
+        icon={<UsersRound className="w-5 h-5" />}
+        badge={
+          <StatusBadge variant={guestStats.pending > 0 ? 'warning' : 'success'}>
+            {guestStats.pending > 0 ? `${guestStats.pending} Awaiting` : 'All replied'}
+          </StatusBadge>
+        }
+        value={String(guestStats.attendingHeadcount)}
+        sublabel={`of ${guestStats.totalGuests} invited`}
+        label="Live Headcount"
+        caption={
+          <>
+            {formatCurrency(costPerAttending)} / seat · {guestStats.responseRate}% replied
+          </>
+        }
+        progress={guestStats.totalGuests > 0 ? (guestStats.attendingHeadcount / guestStats.totalGuests) * 100 : 0}
         progressColor={mood.accent}
         accent={mood.accent}
         accentSoft={mood.accentSoft}

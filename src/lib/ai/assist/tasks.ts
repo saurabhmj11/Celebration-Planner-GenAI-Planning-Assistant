@@ -409,6 +409,62 @@ ${JSON_RULES}`,
 };
 
 /* ------------------------------------------------------------------ */
+/* 4c. Invitation copy                                                */
+/* ------------------------------------------------------------------ */
+
+export interface InvitationCopyResult {
+  headline: string;
+  message: string;
+  signOff: string;
+}
+
+const invitationTask: AssistTask<
+  Extract<AssistRequest, { task: "invitation-copy" }>["payload"],
+  InvitationCopyResult
+> = {
+  systemHint: "guest-facing invitation wording and celebration copywriting",
+  buildUserPrompt: (p) => `
+Write the invitation wording for this celebration:
+- Event: ${str(p.eventTitle, 120)} (${p.eventType})
+- Host: ${str(p.hostName, 120) || "the planning family"}
+- When: ${
+    p.eventDate
+      ? `${p.eventDate}${p.eventTime ? ` at ${p.eventTime}` : ""}`
+      : "date to be announced"
+  }${p.location ? ` | Where: ${str(p.location, 200)}` : ""}
+- Guests expected: ${p.guestCount ?? "TBD"}${
+    p.themeName ? ` | Theme: ${str(p.themeName, 120)}` : ""
+  }
+- Tone: ${p.tone || "warm"}
+${p.rsvpDeadline ? `- RSVP deadline: ${p.rsvpDeadline}` : ""}
+
+Respond strictly in valid JSON matching exactly this schema:
+{
+  "headline": "Invitation headline naming the celebration (under 90 chars)",
+  "message": "Full invitation body (under 1100 chars). Greet the guests warmly, name the occasion, weave in the when/where/theme, and close by asking for the reply and by when. Specific, personal, no placeholders like [Name], no markdown.",
+  "signOff": "Short sign-off from the host(s) (under 80 chars)"
+}
+Rules:
+- The voice must be unmistakably ${
+    p.tone || "warm"
+  } — formal never playful, playful never formal.
+- Reference at least two concrete details from above (occasion, theme, venue style, date).
+- No emoji, no hashtags, no marketing speak.
+${JSON_RULES}`,
+  normalize: (parsed) => {
+    if (typeof parsed !== "object" || parsed === null) return null;
+    const obj = parsed as Record<string, unknown>;
+    const message = str(obj.message, 2000);
+    if (!message) return null;
+    return {
+      headline: str(obj.headline, 200) || "You are invited to a celebration",
+      message,
+      signOff: str(obj.signOff, 120) || "With love & celebration",
+    };
+  },
+};
+
+/* ------------------------------------------------------------------ */
 /* 5. Plan review                                                     */
 /* ------------------------------------------------------------------ */
 
@@ -547,6 +603,7 @@ export const ASSIST_TASK_REGISTRY = {
   "vendor-plan": vendorTask,
   "vendor-inquiry": inquiryTask,
   "venue-recommend": venueTask,
+  "invitation-copy": invitationTask,
   "plan-review": reviewTask,
   "assistant-chat": chatTask,
 } as const;

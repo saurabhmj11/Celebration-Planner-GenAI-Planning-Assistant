@@ -10,6 +10,8 @@ import {
   Clock,
   MapPinned,
   Users,
+  UsersRound,
+  Images,
   Printer,
   Key,
   RotateCcw,
@@ -62,12 +64,14 @@ export const Navbar = ({ currentTab, setCurrentTab, onOpenNewEvent, onOpenApiKey
 
   const navItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    { id: 'budget', label: 'Budget Planner', icon: Wallet },
-    { id: 'timeline', label: 'Timeline & Tasks', icon: Clock },
-    { id: 'venues', label: 'AI Venue Finder', icon: MapPinned, highlight: true },
-    { id: 'vendors', label: 'Vendor Checklist', icon: Users },
-    { id: 'ai', label: 'AI Theme Studio', icon: Sparkles, highlight: true },
-    { id: 'print', label: 'Summary Sheet', icon: Printer },
+    { id: 'budget', label: 'Budget', icon: Wallet, ariaLabel: 'Budget Planner' },
+    { id: 'timeline', label: 'Timeline', icon: Clock, ariaLabel: 'Timeline & Tasks' },
+    { id: 'guests', label: 'Guests', icon: UsersRound, ariaLabel: 'Guests & RSVPs — invitations, replies and headcount', highlight: true },
+    { id: 'photos', label: 'Photos', icon: Images, ariaLabel: 'Photo Memory Wall — share celebration moments' },
+    { id: 'venues', label: 'Venues', icon: MapPinned, ariaLabel: 'AI Venue Finder', highlight: true },
+    { id: 'vendors', label: 'Vendors', icon: Users, ariaLabel: 'Vendor Checklist' },
+    { id: 'ai', label: 'AI Studio', icon: Sparkles, ariaLabel: 'AI Theme Studio', highlight: true },
+    { id: 'print', label: 'Print', icon: Printer, ariaLabel: 'Summary Sheet' },
   ];
 
   const currentTypeInfo = EVENT_TYPES.find((t) => t.id === activeEvent?.type) || EVENT_TYPES[0];
@@ -456,8 +460,10 @@ export const Navbar = ({ currentTab, setCurrentTab, onOpenNewEvent, onOpenApiKey
                 type="button"
                 onClick={() => goToTab(item.id)}
                 aria-current={isActive ? 'page' : undefined}
+                aria-label={item.ariaLabel || item.label}
+                title={item.ariaLabel || item.label}
                 style={isActive ? { backgroundColor: mood.accent } : undefined}
-                className={`flex items-center gap-2 h-9 px-3 rounded-xl text-xs font-bold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 ${
+                className={`flex items-center gap-1.5 xl:gap-2 h-9 px-2 xl:px-3 rounded-xl text-xs font-bold whitespace-nowrap transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 ${
                   isActive
                     ? 'text-white shadow-md'
                     : item.highlight
@@ -497,6 +503,7 @@ export const Navbar = ({ currentTab, setCurrentTab, onOpenNewEvent, onOpenApiKey
                   type="button"
                   onClick={() => goToTab(item.id)}
                   aria-current={isActive ? 'page' : undefined}
+                  aria-label={item.ariaLabel || item.label}
                   style={isActive ? { backgroundColor: mood.accent } : undefined}
                   className={`flex items-center gap-2 p-3 rounded-xl text-xs font-bold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 ${
                     isActive
