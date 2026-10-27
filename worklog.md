@@ -218,3 +218,20 @@ Stage Summary:
 - Deliverable: duplicate React keys eliminated at both ends — new ids can never collide (makeId counter + bulk addTasks single-update), and any data already corrupted by the old bug self-heals on the next page load (sanitize-on-load/import collapses duplicate ids, keeping the first occurrence). By-id toggle/delete/update now act on exactly one task, AI bulk adds fire one state update + one toast.
 - Key files: src/utils/ids.js (new), src/context/EventContext.jsx, src/components/ai/TimelineAI.jsx, tests/utils/ids.test.ts (new).
 - Verification artifacts: scripts/dupefix-timeline-bulk-added.png, scripts/dupefix-final-timeline.png.
+
+---
+Task ID: 10
+Agent: Main agent (Z.ai)
+Task: Finalize the venue- and party-adaptive UI ("ui change according to the venue and party"): the mood engine was found implemented + integrated in a prior session but had NO tests and NO worklog entry — close the loop with verification, tests, and live E2E. Then answer the user's "what features are we still missing" question with a gap analysis.
+
+Work Log:
+- Audited the existing implementation: src/lib/ui/moodEngine.js (deriveCelebrationMood — precedence: applied AI theme > booked-venue vibe > party type) is wired into 4 surfaces (Navbar mood dot, CountdownBanner hero, StatCards accent tints, TimelineView chips) via src/hooks/useCelebrationMood.js. Committed but untested/unlogged.
+- Fixed 2 lint warnings in CountdownBanner.jsx (unused eslint-disable directives → plain comments). Lint now 100% clean (0 errors, 0 warnings).
+- New tests/ui/moodEngine.test.ts — 21 tests: hexToRgba (valid + malformed passthrough), resolveEventVenue (venueId-first, case-insensitive name fallback, stale-id→name recovery, null guards), party-type moods (all 6 types get distinct gradients, unknown-type fallback, null-event DEFAULT_MOOD, literal Tailwind token safety), venue vibe overrides (booked venue wins gradient/photo/phrase incl. Waterside/Ranch/Black-Tie cases, all 12 VENUE_TYPES map to vibe families via synthetic venues, all 16 catalog venues derive with correct imagery, unmapped-type venue degrades to party gradient), theme accent precedence (valid hex wins over vibe, 5 malformed colors rejected, accentSoft/accentFaint track winner). Fixed one fixture bug (ballroom's real catalog name is "The Heritage Grand Ballroom").
+- Suite: 210 pass / 0 fail (was 189, +21); lint clean.
+- E2E (agent-browser, live): wedding active → hero from-rose-950 via-fuchsia-950 to-slate-950; switch to birthday → from-violet-950 via-brand-950 to-fuchsia-950 + active-id persisted; Venue Finder → "Book for this event" on Aurora Skyline Rooftop → venueId saved, zero console errors; Dashboard hero became the venue photo (/venues/rooftop-1.webp) under City Night scrim with eyebrow "City Night Birthday Party" + venue chip; switcher mood dot = #ec4899 proving theme-over-vibe precedence live (event ships with Retro Neon Synthwave theme in sample data); reset to sample data confirmed pristine (3 events, no venue bookings); screenshots mood-1-birthday.png / mood-2-venue-booked.png / mood-3-reset.png.
+
+Stage Summary:
+- Deliverable: the venue/party-adaptive UI task is now fully closed out — the whole UI morphs with the celebration (party-type base palette, booked-venue vibe recoloring the hero with the venue's own photo under a tinted scrim, applied AI theme owning the accent), and it is regression-tested (21 new unit tests) and live-verified end-to-end with zero console errors. 210/210 tests pass, lint fully clean.
+- Key files: src/lib/ui/moodEngine.js, src/hooks/useCelebrationMood.js, src/components/dashboard/CountdownBanner.jsx (lint fix), tests/ui/moodEngine.test.ts (new).
+- Verification artifacts: scripts/mood-1-birthday.png, scripts/mood-2-venue-booked.png, scripts/mood-3-reset.png.

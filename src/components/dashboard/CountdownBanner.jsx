@@ -52,7 +52,7 @@ const CountdownBannerComponent = ({ event, onEditEvent, onOpenAiStudio }) => {
           becomes a window onto the actual place the party will happen. */}
       {mood.hasVenue && mood.heroImage && (
         <>
-          {/* eslint-disable-next-line @next/next/no-img-element -- local catalog photo, decorative */}
+          {/* Local catalog photo, purely decorative backdrop. */}
           <img
             src={mood.heroImage}
             alt=""
@@ -85,7 +85,7 @@ const CountdownBannerComponent = ({ event, onEditEvent, onOpenAiStudio }) => {
                 className="inline-flex items-center gap-1.5 pl-1 pr-3 py-1 rounded-full text-xs font-bold bg-white/15 backdrop-blur-md border border-white/25 text-white"
               >
                 {mood.venueThumb ? (
-                  // eslint-disable-next-line @next/next/no-img-element -- decorative catalog thumbnail
+                  // Decorative catalog thumbnail.
                   <img
                     src={mood.venueThumb}
                     alt=""
