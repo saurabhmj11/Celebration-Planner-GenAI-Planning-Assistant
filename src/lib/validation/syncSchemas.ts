@@ -80,3 +80,29 @@ export const rsvpSubmitSchema = z
     note: shortText(400).optional(),
   })
   .strip();
+
+/* ---------------- Public guest photo album (GAP 3) ---------------- */
+
+/** Same per-photo ceiling the on-device wall enforces (src/lib/photos/photoModel). */
+export const ALBUM_MAX_DATAURL_CHARS = 400_000;
+
+/** Server-side cap so one event's shared album can never balloon the SQLite file. */
+export const ALBUM_MAX_PHOTOS_PER_EVENT = 60;
+
+export const albumUploadSchema = z
+  .object({
+    token: z.string().min(10).max(80),
+    uploader: z.string().min(2, "Tell us your name.").max(80),
+    caption: shortText(200).optional(),
+    dataUrl: z
+      .string()
+      .min(24, "The photo payload looks empty.")
+      .max(ALBUM_MAX_DATAURL_CHARS, "That photo is too large after optimization."),
+  })
+  .strip();
+
+export const ackPhotosSchema = z
+  .object({
+    photoIds: z.array(shortText(80)).min(1).max(120),
+  })
+  .strip();

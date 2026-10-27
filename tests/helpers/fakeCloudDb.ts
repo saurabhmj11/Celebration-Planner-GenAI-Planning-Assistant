@@ -31,8 +31,19 @@ export interface FakeEventRow {
   snapshot: string;
   version: number;
   rsvpToken: string | null;
+  albumToken?: string | null;
   createdAt: Date;
   updatedAt: Date;
+}
+
+export interface FakeGuestPhotoRow {
+  id: string;
+  eventId: string;
+  uploader: string;
+  caption: string | null;
+  dataUrl: string;
+  imported: boolean;
+  createdAt: Date;
 }
 
 export interface FakeResponseRow {
@@ -112,18 +123,24 @@ export function makeSyncDb(seed: {
   users?: FakeUserRow[];
   events?: FakeEventRow[];
   responses?: FakeResponseRow[];
+  photos?: FakeGuestPhotoRow[];
 } = {}) {
   const users = new Map<string, FakeUserRow>();
   const events = new Map<string, FakeEventRow>(); // key: `${userId}:${localId}`
   const responses = new Map<string, FakeResponseRow>(); // key: `${eventId}:${guestKey}`
+  const photos = new Map<string, FakeGuestPhotoRow>(); // key: photo id
   let eventSeq = 0;
   let responseSeq = 0;
+  let photoSeq = 0;
   let sessionSeq = 0;
   const sessions = new Map<string, FakeSessionRow>();
 
   for (const u of seed.users ?? []) users.set(u.email, u);
-  for (const e of seed.events ?? []) events.set(`${e.userId}:${e.localId}`, e);
+  for (const e of seed.events ?? []) {
+    events.set(`${e.userId}:${e.localId}`, { albumToken: null, ...e });
+  }
   for (const r of seed.responses ?? []) responses.set(`${r.eventId}:${r.guestKey}`, r);
+  for (const p of seed.photos ?? []) photos.set(p.id, p);
 
   const findEvent = (where: any): FakeEventRow | null => {
     if (where?.userId_localId) {
@@ -131,6 +148,9 @@ export function makeSyncDb(seed: {
     }
     if (where?.rsvpToken) {
       return [...events.values()].find((e) => e.rsvpToken === where.rsvpToken) ?? null;
+    }
+    if (where?.albumToken) {
+      return [...events.values()].find((e) => e.albumToken === where.albumToken) ?? null;
     }
     if (where?.id) {
       return [...events.values()].find((e) => e.id === where.id) ?? null;
@@ -174,6 +194,7 @@ export function makeSyncDb(seed: {
           snapshot: data.snapshot,
           version: data.version ?? 1,
           rsvpToken: data.rsvpToken ?? null,
+          albumToken: data.albumToken ?? null,
           createdAt: new Date(),
           updatedAt: new Date(),
         };
@@ -191,6 +212,7 @@ export function makeSyncDb(seed: {
           ...(data.eventDate !== undefined ? { eventDate: data.eventDate } : {}),
           ...(data.snapshot !== undefined ? { snapshot: data.snapshot } : {}),
           ...(data.rsvpToken !== undefined ? { rsvpToken: data.rsvpToken } : {}),
+          ...(data.albumToken !== undefined ? { albumToken: data.albumToken } : {}),
           ...(inc ? { version: row.version + inc } : {}),
           updatedAt: new Date(),
         };
@@ -271,6 +293,46 @@ export function makeSyncDb(seed: {
         return row;
       },
     },
+    guestPhoto: {
+      count: async ({ where }: any) => {
+        let rows = [...photos.values()];
+        if (where?.eventId) rows = rows.filter((p) => p.eventId === where.eventId);
+        if (where?.id?.in) rows = rows.filter((p) => where.id.in.includes(p.id));
+        return rows.length;
+      },
+      findMany: async ({ where, orderBy }: any) => {
+        let rows = [...photos.values()];
+        if (where?.eventId) rows = rows.filter((p) => p.eventId === where.eventId);
+        if (where?.id?.in) rows = rows.filter((p) => where.id.in.includes(p.id));
+        if (orderBy?.createdAt === "asc") {
+          rows.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+        }
+        return rows;
+      },
+      create: async ({ data }: any) => {
+        const row: FakeGuestPhotoRow = {
+          id: data.id ?? `photo-${++photoSeq}`,
+          eventId: data.eventId,
+          uploader: data.uploader,
+          caption: data.caption ?? null,
+          dataUrl: data.dataUrl,
+          imported: data.imported ?? false,
+          createdAt: new Date(data.createdAt ?? Date.now()),
+        };
+        photos.set(row.id, row);
+        return row;
+      },
+      deleteMany: async ({ where }: any) => {
+        let removed = 0;
+        for (const [key, p] of photos) {
+          if (p.eventId !== where?.eventId) continue;
+          if (where.id?.in && !where.id.in.includes(p.id)) continue;
+          photos.delete(key);
+          removed += 1;
+        }
+        return { count: removed };
+      },
+    },
   };
 
   /** Utility: plant a live session for a user and return its cookie token. */
@@ -289,7 +351,7 @@ export function makeSyncDb(seed: {
     return token;
   };
 
-  return { db, users, events, responses, sessions, loginAs };
+  return { db, users, events, responses, photos, sessions, loginAs };
 }
 
 /** Build a Request with a JSON body + optional session cookie. */

@@ -14,6 +14,7 @@ import { readSessionToken, resolveSession } from "@/lib/auth/session";
 import { checkRateLimit, getClientKey } from "@/lib/security/rateLimit";
 import { formatZodErrors } from "@/lib/validation/schemas";
 import {
+  ackPhotosSchema,
   ackResponsesSchema,
   SYNC_COLLECTION_CAP,
   syncPushSchema,
@@ -36,6 +37,11 @@ export interface SyncDb {
     findMany: (args: unknown) => Promise<RsvpRow[]>;
     deleteMany: (args: unknown) => Promise<{ count: number }>;
   };
+  guestPhoto: {
+    count: (args: unknown) => Promise<number>;
+    findMany: (args: unknown) => Promise<GuestPhotoRow[]>;
+    deleteMany: (args: unknown) => Promise<{ count: number }>;
+  };
 }
 
 export interface SyncedEventRow {
@@ -48,8 +54,19 @@ export interface SyncedEventRow {
   snapshot: string;
   version: number;
   rsvpToken: string | null;
+  albumToken: string | null;
   createdAt: Date;
   updatedAt: Date;
+}
+
+export interface GuestPhotoRow {
+  id: string;
+  eventId: string;
+  uploader: string;
+  caption: string | null;
+  dataUrl: string;
+  imported: boolean;
+  createdAt: Date;
 }
 
 export interface RsvpRow {
@@ -140,7 +157,11 @@ function sweep(value: unknown, depth = 0): unknown {
   return out;
 }
 
-function eventSummaries(rows: SyncedEventRow[], counts: Map<string, number>) {
+function eventSummaries(
+  rows: SyncedEventRow[],
+  counts: Map<string, number>,
+  photoCounts: Map<string, number>
+) {
   return rows.map((row) => ({
     localId: row.localId,
     title: row.title,
@@ -149,7 +170,9 @@ function eventSummaries(rows: SyncedEventRow[], counts: Map<string, number>) {
     version: row.version,
     updatedAt: row.updatedAt.toISOString(),
     hasRsvpToken: Boolean(row.rsvpToken),
+    hasAlbumToken: Boolean(row.albumToken),
     responseCount: counts.get(row.id) ?? 0,
+    guestPhotoCount: photoCounts.get(row.id) ?? 0,
   }));
 }
 
@@ -166,12 +189,17 @@ export function createSyncListHandler(db: SyncDb) {
       orderBy: { updatedAt: "desc" },
     });
     const counts = new Map<string, number>();
+    const photoCounts = new Map<string, number>();
     await Promise.all(
       rows.map(async (row) => {
         counts.set(row.id, await db.rsvpResponse.count({ where: { eventId: row.id } }));
+        photoCounts.set(
+          row.id,
+          await db.guestPhoto.count({ where: { eventId: row.id } })
+        );
       })
     );
-    return NextResponse.json({ events: eventSummaries(rows, counts) });
+    return NextResponse.json({ events: eventSummaries(rows, counts, photoCounts) });
   };
 }
 
@@ -330,6 +358,89 @@ export function createShareRsvpHandler(db: SyncDb) {
       request.headers.get("x-forwarded-proto") ||
       (host.startsWith("localhost") || host.startsWith("127.") ? "http" : "https");
     return NextResponse.json({ token, url: `${proto}://${host}/rsvp/${token}` });
+  };
+}
+
+/* POST /api/sync/events/[localId]/share-album — mint (or return) the guest-photo token */
+export function createShareAlbumHandler(db: SyncDb) {
+  return async function POST(request: Request, ctx: RouteCtx): Promise<Response> {
+    const user = await requireUser(db, request);
+    if (!user) return unauthorized();
+    const { localId } = await ctx.params;
+    const row = await findOwnedEvent(db, user, localId);
+    if (!row) {
+      return jsonError(
+        "Sync this event to your cloud before sharing a photo album link.",
+        404
+      );
+    }
+
+    let token = row.albumToken;
+    if (!token) {
+      token = randomBytes(16).toString("hex");
+      await db.syncedEvent.update({ where: { id: row.id }, data: { albumToken: token } });
+    }
+
+    const host =
+      request.headers.get("x-forwarded-host") ||
+      request.headers.get("host") ||
+      "localhost:3000";
+    const proto =
+      request.headers.get("x-forwarded-proto") ||
+      (host.startsWith("localhost") || host.startsWith("127.") ? "http" : "https");
+    return NextResponse.json({ token, url: `${proto}://${host}/album/${token}` });
+  };
+}
+
+/* GET /api/sync/events/[localId]/photos — the guest-photo inbox (pre-import) */
+export function createGuestPhotosHandler(db: SyncDb) {
+  return async function GET(request: Request, ctx: RouteCtx): Promise<Response> {
+    const user = await requireUser(db, request);
+    if (!user) return unauthorized();
+    const { localId } = await ctx.params;
+    const row = await findOwnedEvent(db, user, localId);
+    if (!row) return jsonError("This event is not synced to your cloud.", 404);
+
+    const photos = await db.guestPhoto.findMany({
+      where: { eventId: row.id },
+      orderBy: { createdAt: "asc" },
+    });
+    return NextResponse.json({
+      photos: photos.map((p) => ({
+        id: p.id,
+        uploader: p.uploader,
+        caption: p.caption,
+        dataUrl: p.dataUrl,
+        createdAt: p.createdAt.toISOString(),
+      })),
+      count: photos.length,
+    });
+  };
+}
+
+/* POST /api/sync/events/[localId]/photos/ack — remove imported photos (collect & clear) */
+export function createAckPhotosHandler(db: SyncDb) {
+  return async function POST(request: Request, ctx: RouteCtx): Promise<Response> {
+    const user = await requireUser(db, request);
+    if (!user) return unauthorized();
+    const { localId } = await ctx.params;
+    const row = await findOwnedEvent(db, user, localId);
+    if (!row) return jsonError("This event is not synced to your cloud.", 404);
+
+    try {
+      const parsed = ackPhotosSchema.safeParse(
+        JSON.parse((await request.text()) || "{}")
+      );
+      if (!parsed.success) {
+        return jsonError("Validation failed", 400, formatZodErrors(parsed.error));
+      }
+      const result = await db.guestPhoto.deleteMany({
+        where: { eventId: row.id, id: { in: parsed.data.photoIds } },
+      });
+      return NextResponse.json({ ok: true, deleted: result.count });
+    } catch {
+      return jsonError("Invalid JSON body", 400);
+    }
   };
 }
 

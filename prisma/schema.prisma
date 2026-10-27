@@ -38,19 +38,21 @@ model Session {
 }
 
 model SyncedEvent {
-  id        String         @id @default(cuid())
-  userId    String
-  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
-  localId   String
-  title     String
-  eventType String
-  eventDate String?
-  snapshot  String
-  version   Int            @default(1)
-  rsvpToken String?        @unique
-  createdAt DateTime       @default(now())
-  updatedAt DateTime       @updatedAt
-  responses RsvpResponse[]
+  id         String         @id @default(cuid())
+  userId     String
+  user       User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  localId    String
+  title      String
+  eventType  String
+  eventDate  String?
+  snapshot   String
+  version    Int            @default(1)
+  rsvpToken  String?        @unique
+  albumToken String?        @unique
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+  responses  RsvpResponse[]
+  photos     GuestPhoto[]
 
   @@unique([userId, localId])
   @@index([userId])
@@ -71,5 +73,21 @@ model RsvpResponse {
   updatedAt  DateTime    @updatedAt
 
   @@unique([eventId, guestKey])
+  @@index([eventId])
+}
+
+// Guest-shared photos (GAP 3): guests upload through the public /album/[token]
+// portal; the host imports them into the on-device memory wall and acks
+// (deletes) the server copies — same collect-and-clear flow as RSVP responses.
+model GuestPhoto {
+  id        String      @id @default(cuid())
+  eventId   String
+  event     SyncedEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  uploader  String
+  caption   String?
+  dataUrl   String
+  imported  Boolean     @default(false)
+  createdAt DateTime    @default(now())
+
   @@index([eventId])
 }
