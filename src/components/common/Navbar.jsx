@@ -21,6 +21,7 @@ import {
   X,
 } from 'lucide-react';
 import { formatShortDate, formatCurrency } from '../../utils/formatters';
+import { useCelebrationMood } from '../../hooks/useCelebrationMood';
 
 /**
  * Application top bar — two-tier layout.
@@ -49,6 +50,7 @@ export const Navbar = ({ currentTab, setCurrentTab, onOpenNewEvent, onOpenApiKey
 
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const mood = useCelebrationMood();
 
   const dropdownRef = useRef(null);
   const dropdownTriggerRef = useRef(null);
@@ -235,6 +237,12 @@ export const Navbar = ({ currentTab, setCurrentTab, onOpenNewEvent, onOpenApiKey
               className="flex items-center gap-2.5 h-10 px-3.5 w-full sm:w-auto sm:max-w-md rounded-2xl bg-slate-100/90 hover:bg-slate-200/80 border border-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-1 transition-all text-left min-w-0"
             >
               <span className="text-lg shrink-0" aria-hidden="true">{currentTypeInfo?.icon}</span>
+              <span
+                className="w-2 h-2 rounded-full shrink-0 shadow-sm"
+                style={{ backgroundColor: mood.accent }}
+                aria-hidden="true"
+                title="Celebration mood color — follows the party type, booked venue and applied theme"
+              />
               <span className="truncate min-w-0 flex-1">
                 <span className="block text-xs font-bold text-slate-800 truncate">
                   {activeEvent?.title || 'Select Event'}
@@ -448,9 +456,10 @@ export const Navbar = ({ currentTab, setCurrentTab, onOpenNewEvent, onOpenApiKey
                 type="button"
                 onClick={() => goToTab(item.id)}
                 aria-current={isActive ? 'page' : undefined}
+                style={isActive ? { backgroundColor: mood.accent } : undefined}
                 className={`flex items-center gap-2 h-9 px-3 rounded-xl text-xs font-bold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 ${
                   isActive
-                    ? 'bg-brand-600 text-white shadow-md shadow-brand-500/25'
+                    ? 'text-white shadow-md'
                     : item.highlight
                     ? 'bg-amber-50 text-amber-900 border border-amber-200 hover:bg-amber-100'
                     : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
@@ -488,9 +497,10 @@ export const Navbar = ({ currentTab, setCurrentTab, onOpenNewEvent, onOpenApiKey
                   type="button"
                   onClick={() => goToTab(item.id)}
                   aria-current={isActive ? 'page' : undefined}
+                  style={isActive ? { backgroundColor: mood.accent } : undefined}
                   className={`flex items-center gap-2 p-3 rounded-xl text-xs font-bold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 ${
                     isActive
-                      ? 'bg-brand-600 text-white'
+                      ? 'text-white'
                       : 'bg-slate-50 text-slate-700 hover:bg-slate-100'
                   }`}
                 >

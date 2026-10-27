@@ -3,6 +3,8 @@ import { useEventContext } from '../../context/EventContext';
 import { TIMELINE_PHASES, BUDGET_CATEGORIES } from '../../data/defaultData';
 import { calculateTimelineStats, getDueDateUrgency } from '../../utils/calculator';
 import { TimelineAI } from '../ai/TimelineAI';
+import { useCelebrationMood } from '../../hooks/useCelebrationMood';
+import { hexToRgba } from '../../lib/ui/moodEngine';
 import {
   Clock,
   Plus,
@@ -17,6 +19,7 @@ import {
 
 export const TimelineView = ({ onOpenTaskModal, onEditTask }) => {
   const { activeEvent, toggleTaskComplete, deleteTask } = useEventContext();
+  const mood = useCelebrationMood();
 
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedPhase, setSelectedPhase] = useState('all');
@@ -72,7 +75,10 @@ export const TimelineView = ({ onOpenTaskModal, onEditTask }) => {
             <h2 className="text-2xl sm:text-3xl font-display font-extrabold text-slate-900">
               Event Timeline & Milestones
             </h2>
-            <span className="px-3 py-1 rounded-full text-xs font-bold bg-brand-50 text-brand-800 border border-brand-200">
+            <span
+              className="px-3 py-1 rounded-full text-xs font-bold border"
+              style={{ backgroundColor: mood.accentSoft, color: mood.accent, borderColor: hexToRgba(mood.accent, 0.35) }}
+            >
               {completedTasks} / {totalTasks} Completed
             </span>
           </div>
@@ -97,12 +103,15 @@ export const TimelineView = ({ onOpenTaskModal, onEditTask }) => {
             <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
               Milestone Completion Rate
             </span>
-            <span className="text-sm font-extrabold text-brand-700">{progressPct}%</span>
+            <span className="text-sm font-extrabold" style={{ color: mood.accent }}>{progressPct}%</span>
           </div>
           <div className="w-full bg-slate-100 rounded-full h-3 overflow-hidden">
             <div
-              className="bg-gradient-to-r from-brand-600 to-fuchsia-600 h-full rounded-full transition-all duration-700"
-              style={{ width: `${progressPct}%` }}
+              className="h-full rounded-full transition-all duration-700"
+              style={{
+                width: `${progressPct}%`,
+                background: `linear-gradient(90deg, ${mood.accent}, ${hexToRgba(mood.accent, 0.55)})`,
+              }}
             />
           </div>
           <div className="flex items-center justify-between text-xs text-slate-500 pt-1">

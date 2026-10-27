@@ -1,36 +1,18 @@
 import React, { useState, useEffect, memo } from 'react';
 import { Calendar, MapPin, Users, Pencil, Sparkles } from 'lucide-react';
-import { EVENT_TYPES } from '../../data/defaultData';
+import { useCelebrationMood } from '../../hooks/useCelebrationMood';
 import { formatEventDate } from '../../utils/formatters';
 
 /**
- * Event-type-aware hero gradients so each celebration category feels distinct.
+ * Celebration hero — the UI morphs to match the party AND its venue:
+ * the mood engine (party type + booked venue + applied AI theme) drives the
+ * gradient family, and when a venue is booked its photo becomes the
+ * backdrop under a vibe-tinted scrim.
  */
-const TYPE_THEMES = {
-  wedding: {
-    gradient: 'from-rose-950 via-fuchsia-950 to-slate-950',
-    glowA: 'bg-rose-500/25',
-    glowB: 'bg-amber-500/15',
-  },
-  birthday: {
-    gradient: 'from-violet-950 via-brand-950 to-fuchsia-950',
-    glowA: 'bg-brand-500/25',
-    glowB: 'bg-pink-500/15',
-  },
-  community: {
-    gradient: 'from-emerald-950 via-teal-950 to-slate-950',
-    glowA: 'bg-emerald-500/25',
-    glowB: 'bg-cyan-500/15',
-  },
-  other: {
-    gradient: 'from-slate-900 via-brand-950 to-fuchsia-950',
-    glowA: 'bg-brand-500/20',
-    glowB: 'bg-rose-500/15',
-  },
-};
 
 const CountdownBannerComponent = ({ event, onEditEvent, onOpenAiStudio }) => {
   const [timeLeft, setTimeLeft] = useState({ days: 0, hours: 0, minutes: 0, isPast: false });
+  const mood = useCelebrationMood();
 
   useEffect(() => {
     if (!event?.date) return;
@@ -59,27 +41,63 @@ const CountdownBannerComponent = ({ event, onEditEvent, onOpenAiStudio }) => {
 
   if (!event) return null;
 
-  const typeInfo = EVENT_TYPES.find((t) => t.id === event.type) || EVENT_TYPES[0];
-  const theme = TYPE_THEMES[event.type] || TYPE_THEMES.other;
   const friendlyDate = formatEventDate(event.date);
 
   return (
     <section
       aria-label={`${event.title} overview and countdown`}
-      className={`relative overflow-hidden rounded-3xl bg-gradient-to-br ${theme.gradient} text-white shadow-xl border border-slate-800/80`}
+      className={`relative overflow-hidden rounded-3xl bg-gradient-to-br ${mood.gradient} text-white shadow-xl border border-slate-800/80`}
     >
+      {/* Booked-venue photo backdrop under a vibe-tinted scrim — the hero
+          becomes a window onto the actual place the party will happen. */}
+      {mood.hasVenue && mood.heroImage && (
+        <>
+          {/* eslint-disable-next-line @next/next/no-img-element -- local catalog photo, decorative */}
+          <img
+            src={mood.heroImage}
+            alt=""
+            aria-hidden="true"
+            className="absolute inset-0 w-full h-full object-cover"
+          />
+          <div
+            className={`absolute inset-0 bg-gradient-to-br ${mood.gradient} opacity-90`}
+            aria-hidden="true"
+          />
+        </>
+      )}
+
       {/* Ambient background glow accents */}
-      <div className={`absolute -top-24 -right-24 w-96 h-96 ${theme.glowA} rounded-full blur-3xl pointer-events-none`} aria-hidden="true" />
-      <div className={`absolute -bottom-24 -left-24 w-80 h-80 ${theme.glowB} rounded-full blur-3xl pointer-events-none`} aria-hidden="true" />
+      <div className={`absolute -top-24 -right-24 w-96 h-96 ${mood.glowA} rounded-full blur-3xl pointer-events-none`} aria-hidden="true" />
+      <div className={`absolute -bottom-24 -left-24 w-80 h-80 ${mood.glowB} rounded-full blur-3xl pointer-events-none`} aria-hidden="true" />
 
       <div className="relative z-10 p-6 sm:p-8 lg:p-10 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-8">
         {/* Left: Event Details */}
         <div className="space-y-4 max-w-2xl">
           <div className="flex flex-wrap items-center gap-2.5">
             <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-white/15 backdrop-blur-md border border-white/25 text-white">
-              <span className="text-sm" aria-hidden="true">{typeInfo.icon}</span>
-              {typeInfo.label}
+              <span className="text-sm" aria-hidden="true">{mood.typeIcon}</span>
+              {mood.typeLabel}
             </span>
+
+            {mood.hasVenue && (
+              <span
+                title={mood.venueArea || mood.venueName}
+                className="inline-flex items-center gap-1.5 pl-1 pr-3 py-1 rounded-full text-xs font-bold bg-white/15 backdrop-blur-md border border-white/25 text-white"
+              >
+                {mood.venueThumb ? (
+                  // eslint-disable-next-line @next/next/no-img-element -- decorative catalog thumbnail
+                  <img
+                    src={mood.venueThumb}
+                    alt=""
+                    aria-hidden="true"
+                    className="w-5 h-5 rounded-full object-cover border border-white/60"
+                  />
+                ) : (
+                  <MapPin className="w-3.5 h-3.5" aria-hidden="true" />
+                )}
+                <span className="truncate max-w-[12rem]">{mood.venueName}</span>
+              </span>
+            )}
 
             {event.themeName && (
               <button
@@ -104,7 +122,12 @@ const CountdownBannerComponent = ({ event, onEditEvent, onOpenAiStudio }) => {
           </div>
 
           <div>
-            <h2 className="text-2xl sm:text-3xl lg:text-4xl font-display font-extrabold tracking-tight leading-tight">
+            {mood.hasVenue && (
+              <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-white/70 mb-1">
+                {mood.moodPhrase}
+              </p>
+            )}
+            <h2 className="text-2xl sm:text-3xl lg:text-4xl font-display font-extrabold tracking-tight leading-tight drop-shadow-[0_2px_6px_rgba(0,0,0,0.45)]">
               {event.title}
             </h2>
             {event.description && (
