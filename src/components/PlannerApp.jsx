@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import dynamic from 'next/dynamic';
 import { EventProvider, useEventContext } from '@/context/EventContext';
 import { Navbar } from '@/components/common/Navbar';
@@ -10,6 +10,9 @@ import { EventFormModal } from '@/components/events/EventFormModal';
 import { ExpenseFormModal } from '@/components/budget/ExpenseFormModal';
 import { TaskFormModal } from '@/components/timeline/TaskFormModal';
 import { VendorFormModal } from '@/components/vendors/VendorFormModal';
+import { CommandPalette } from '@/components/common/CommandPalette';
+import { ErrorBoundary } from '@/components/common/ErrorBoundary';
+import { ServiceWorkerRegistrar } from '@/components/common/ServiceWorkerRegistrar';
 
 import { DashboardOverview } from '@/components/dashboard/DashboardOverview';
 import { BudgetPlanner } from '@/components/budget/BudgetPlanner';
@@ -54,8 +57,22 @@ const SkipLink = () => (
 );
 
 const MainAppContent = () => {
-  const { activeEvent } = useEventContext();
+  const { activeEvent, exportEventsData } = useEventContext();
   const [currentTab, setCurrentTab] = useState('dashboard');
+
+  // Global ⌘K / Ctrl+K command palette
+  const [isPaletteOpen, setIsPaletteOpen] = useState(false);
+
+  useEffect(() => {
+    const onKey = (e) => {
+      if ((e.metaKey || e.ctrlKey) && (e.key === 'k' || e.key === 'K')) {
+        e.preventDefault();
+        setIsPaletteOpen((open) => !open);
+      }
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, []);
 
   // Modal states
   const [isEventModalOpen, setIsEventModalOpen] = useState(false);
@@ -124,6 +141,7 @@ const MainAppContent = () => {
         onOpenNewEvent={handleOpenNewEvent}
         onOpenApiKey={() => setIsApiKeyModalOpen(true)}
         onEditCurrentEvent={handleEditCurrentEvent}
+        onOpenPalette={() => setIsPaletteOpen(true)}
       />
 
       {/* Main Content Area */}
@@ -131,6 +149,15 @@ const MainAppContent = () => {
         id="main-content"
         className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 scroll-mt-20 lg:scroll-mt-28"
       >
+        {/* Tab-level safety net: one throwing component can never white-screen
+            the app. key={currentTab} remounts it on every tab switch, so
+            "Try Again" always starts from a clean slate. */}
+        <ErrorBoundary
+          key={currentTab}
+          boundaryName={currentTab}
+          onNavigateHome={() => setCurrentTab('dashboard')}
+          onExportBackup={exportEventsData}
+        >
         {currentTab === 'dashboard' && (
           <DashboardOverview
             onNavigate={setCurrentTab}
@@ -178,6 +205,7 @@ const MainAppContent = () => {
         )}
 
         {currentTab === 'print' && <EventPrintSummary />}
+        </ErrorBoundary>
       </main>
 
       {/* Footer — sticks to viewport bottom; pushes down naturally on overflow */}
@@ -241,11 +269,26 @@ const MainAppContent = () => {
         onClose={() => setIsApiKeyModalOpen(false)}
       />
 
+      {/* ⌘K / Ctrl+K command palette — sits above everything */}
+      <CommandPalette
+        open={isPaletteOpen}
+        onOpenChange={setIsPaletteOpen}
+        onNavigate={setCurrentTab}
+        onOpenNewEvent={handleOpenNewEvent}
+        onOpenAddExpense={handleOpenAddExpense}
+        onOpenAddTask={handleOpenAddTask}
+        onOpenAddVendor={handleOpenAddVendor}
+        onOpenApiKey={() => setIsApiKeyModalOpen(true)}
+      />
+
       {/* Floating context-aware AI assistant (all tabs) */}
       <AssistantChat />
 
       {/* Toast Notification Container */}
       <NotificationToast />
+
+      {/* PWA: offline app-shell caching (production builds only) */}
+      <ServiceWorkerRegistrar />
     </div>
   );
 };

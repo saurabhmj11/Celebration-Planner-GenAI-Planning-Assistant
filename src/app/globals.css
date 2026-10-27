@@ -327,4 +327,242 @@
     display: block !important;
   }
 }
+/* =========================================================
+   Dark theme inversion layer
+   ---------------------------------------------------------
+   next-themes toggles `.dark` on <html>. The app's components
+   were authored with light-mode Tailwind utilities (bg-white
+   cards, bg-slate-50 pages, slate-700..900 text), so a full
+   dark: rewrite of 40+ components is impractical. Instead:
+
+   1. Hue TINT variables (brand/rose/emerald/amber -50..-200)
+      are remapped under .dark — backgrounds, borders and
+      gradient stops follow automatically (Tailwind 4 utilities
+      reference var(--color-*), including alpha color-mix and
+      from-/via-/to- stops).
+   2. slate/white SURFACE + TEXT utilities are overridden by
+      class with higher specificity — because slate-50/900 and
+      white are dual-use (light bg AND light text on saturated
+      surfaces), a blanket variable remap would break headers.
+   3. Light-text utilities (text-white, text-slate-50..300)
+      are intentionally left untouched.
+   ========================================================= */
+
+.dark {
+  color-scheme: dark;
+  --tw-ring-offset-color: #0b1220;
+}
+
+.dark body {
+  background-color: #0b1220;
+  color: #dbe4f3;
+}
+
+/* --- Hue tint remaps (bg / border / gradient stops follow) --- */
+.dark {
+  --color-brand-50: #1e1b3d;
+  --color-brand-100: #262051;
+  --color-brand-200: #342c6e;
+
+  --color-fuchsia-50: #2a1a44;
+  --color-fuchsia-100: #341f53;
+  --color-fuchsia-200: #412763;
+
+  --color-violet-50: #1e2246;
+  --color-violet-100: #262c58;
+
+  --color-indigo-50: #1c2244;
+  --color-indigo-100: #242b57;
+
+  --color-rose-50: #331d29;
+  --color-rose-100: #3e2433;
+  --color-rose-200: #522f43;
+
+  --color-emerald-50: #122821;
+  --color-emerald-100: #16352b;
+  --color-emerald-200: #1e4a39;
+
+  --color-amber-50: #2a2210;
+  --color-amber-100: #352a16;
+  --color-amber-200: #4a3a1e;
+
+  --color-sky-50: #182336;
+  --color-sky-100: #1d2d48;
+  --color-sky-200: #273e5f;
+
+  --color-teal-50: #102d2b;
+  --color-teal-100: #14403c;
+
+  --color-orange-50: #2b1d10;
+  --color-orange-100: #382515;
+
+  --color-purple-50: #23183f;
+  --color-purple-100: #2c1f4f;
+  --color-purple-200: #382663;
+
+  --color-blue-50: #16223c;
+  --color-blue-100: #1b2a4c;
+  --color-blue-200: #253761;
+
+  --color-cyan-50: #10262c;
+  --color-cyan-100: #14333b;
+  --color-cyan-200: #1c4550;
+}
+
+/* --- Light hue-tint TEXT pinned back to readable lights --- */
+.dark .text-brand-50 { color: #f5f3ff; }
+.dark .text-brand-100 { color: #ede9fe; }
+.dark .text-rose-50 { color: #fff1f2; }
+.dark .text-rose-100 { color: #ffe4e6; }
+.dark .text-emerald-50 { color: #ecfdf5; }
+.dark .text-emerald-100 { color: #d1fae5; }
+.dark .text-emerald-200 { color: #a7f3d0; }
+.dark .text-amber-50 { color: #fffbeb; }
+.dark .text-amber-100 { color: #fef3c7; }
+.dark .text-indigo-100 { color: #e0e7ff; }
+.dark .text-fuchsia-200 { color: #f5d0fe; }
+
+/* --- Dark hue emphasis text -> light hue equivalents --- */
+.dark .text-brand-700 { color: #c4b5fd; }
+.dark .text-brand-800 { color: #d3bcfd; }
+.dark .text-brand-900 { color: #ddd6fe; }
+.dark .text-rose-700,
+.dark .text-rose-800 { color: #fda4af; }
+.dark .text-rose-900 { color: #fecdd3; }
+.dark .text-emerald-700,
+.dark .text-emerald-800 { color: #6ee7b7; }
+.dark .text-emerald-900 { color: #a7f3d0; }
+.dark .text-amber-700,
+.dark .text-amber-800 { color: #fcd34d; }
+.dark .text-amber-900 { color: #fde68a; }
+.dark .text-blue-700 { color: #93c5fd; }
+.dark .text-cyan-700 { color: #67e8f9; }
+.dark .text-purple-700 { color: #d8b4fe; }
+.dark .text-sky-700,
+.dark .text-sky-800 { color: #7dd3fc; }
+.dark .text-violet-700 { color: #c4b5fd; }
+.dark .text-orange-800 { color: #fdba74; }
+.dark .text-indigo-900 { color: #a5b4fc; }
+.dark .text-fuchsia-800 { color: #f0abfc; }
+
+/* --- Surfaces: pages, cards, subtle fills --- */
+.dark .bg-slate-50 { background-color: #0b1220; }
+.dark .bg-slate-100 { background-color: #17223a; }
+.dark .bg-slate-200 { background-color: #253150; }
+.dark .bg-white { background-color: #141d33; }
+
+.dark .bg-slate-50\/60 { background-color: rgb(11 18 32 / 0.6); }
+.dark .bg-slate-50\/70 { background-color: rgb(11 18 32 / 0.7); }
+.dark .bg-slate-50\/80 { background-color: rgb(11 18 32 / 0.8); }
+.dark .bg-slate-100\/80 { background-color: rgb(23 34 58 / 0.8); }
+.dark .bg-slate-100\/90 { background-color: rgb(23 34 58 / 0.9); }
+.dark .bg-slate-200\/50 { background-color: rgb(37 49 80 / 0.5); }
+.dark .bg-slate-200\/80 { background-color: rgb(37 49 80 / 0.8); }
+.dark .bg-white\/60 { background-color: rgb(20 29 51 / 0.6); }
+.dark .bg-white\/70 { background-color: rgb(20 29 51 / 0.7); }
+.dark .bg-white\/80 { background-color: rgb(20 29 51 / 0.8); }
+.dark .bg-white\/85 { background-color: rgb(20 29 51 / 0.85); }
+.dark .bg-white\/90 { background-color: rgb(20 29 51 / 0.9); }
+.dark .bg-white\/95 { background-color: rgb(20 29 51 / 0.95); }
+
+/* Solid near-black accent chips (toasts, active filter pills, dark
+   buttons) lift to a raised navy so they read on the dark page. */
+.dark .bg-slate-900 { background-color: #1a2742; }
+
+/* --- Text: body copy + headings flip to light grays --- */
+.dark .text-slate-900 { color: #f1f5f9; }
+.dark .text-slate-800 { color: #e2e8f0; }
+.dark .text-slate-700 { color: #cbd5e1; }
+.dark .text-slate-600 { color: #b7c3d9; }
+.dark .text-slate-500 { color: #9aa8c0; }
+.dark .text-slate-400 { color: #7e8ca6; }
+
+/* --- Borders + dividers --- */
+.dark .border-slate-100 { border-color: #1c2740; }
+.dark .border-slate-200 { border-color: #2a3855; }
+.dark .border-slate-200\/60 { border-color: rgb(42 56 85 / 0.6); }
+.dark .border-slate-200\/70 { border-color: rgb(42 56 85 / 0.7); }
+.dark .border-slate-200\/80 { border-color: rgb(42 56 85 / 0.8); }
+.dark .border-slate-300 { border-color: #3a4a68; }
+.dark .border-slate-400 { border-color: #3f4f6f; }
+.dark .divide-slate-100 > :not(:last-child) { border-color: #1c2740; }
+
+/* --- Interaction states --- */
+.dark .hover\:bg-slate-50:hover { background-color: #16213a; }
+.dark .hover\:bg-slate-50\/70:hover { background-color: rgb(22 33 58 / 0.7); }
+.dark .hover\:bg-slate-50\/80:hover { background-color: rgb(22 33 58 / 0.8); }
+.dark .hover\:bg-slate-100:hover { background-color: #1e2b48; }
+.dark .hover\:bg-slate-100\/80:hover { background-color: rgb(30 43 72 / 0.8); }
+.dark .hover\:bg-slate-200:hover { background-color: #2c3b5c; }
+.dark .hover\:bg-slate-200\/50:hover { background-color: rgb(44 59 92 / 0.5); }
+.dark .hover\:bg-slate-200\/80:hover { background-color: rgb(44 59 92 / 0.8); }
+.dark .hover\:bg-slate-700:hover { background-color: #2c3b5c; }
+.dark .hover\:bg-slate-800:hover { background-color: #253150; }
+.dark .focus\:bg-white:focus { background-color: #1a2742; }
+/* Skip link focus pill: brand fill keeps white focus text readable */
+.dark .focus\:bg-slate-900:focus { background-color: #7c3aed; }
+
+.dark .hover\:text-slate-900:hover { color: #f1f5f9; }
+.dark .hover\:text-slate-700:hover { color: #cbd5e1; }
+.dark .hover\:text-brand-700:hover { color: #c4b5fd; }
+.dark .hover\:text-brand-800:hover { color: #d3bcfd; }
+
+/* --- Gradient stops that must flip (dark-on-dark wordmarks) --- */
+.dark .from-slate-900 { --tw-gradient-from: #e2e8f0; }
+.dark .to-slate-900 { --tw-gradient-to: #e2e8f0; }
+.dark .from-slate-950 { --tw-gradient-from: #f1f5f9; }
+.dark .via-slate-950 { --tw-gradient-via: #f8fafc; }
+.dark .via-white { --tw-gradient-via: #141d33; }
+.dark .via-brand-900 { --tw-gradient-via: #c4b5fd; }
+.dark .to-brand-800 { --tw-gradient-to: #a78bfa; }
+
+/* --- Glass helpers --- */
+.dark .glass-panel {
+  background: rgba(13, 20, 36, 0.85);
+  border-color: rgba(42, 56, 85, 0.8);
+}
+.dark .glass-card {
+  background: rgba(20, 29, 51, 0.92);
+  border-color: rgba(42, 56, 85, 0.7);
+}
+
+/* --- Scrollbars --- */
+.dark ::-webkit-scrollbar-thumb { background: #2a3855; }
+.dark ::-webkit-scrollbar-thumb:hover { background: #3a4a68; }
+.dark .custom-scrollbar::-webkit-scrollbar-thumb { background: #342c6e; }
+.dark .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #423a85; }
+
+/* --- Maps: VenueFinder tiles render as a night map --- */
+.dark .leaflet-tile {
+  filter: invert(1) hue-rotate(180deg) brightness(0.86) contrast(0.92);
+}
+.dark .leaflet-container { background: #0b1220; }
+.dark .leaflet-control a {
+  background-color: #141d33;
+  color: #cbd5e1;
+}
+
+/* Focus outline stays brand-bright on dark surfaces */
+.dark :focus-visible {
+  outline-color: #a78bfa;
+}
+
+/* =========================================================
+   Print stays paper-white regardless of theme
+   ========================================================= */
+@media print {
+  .dark .bg-white,
+  .dark .bg-slate-50,
+  .dark .bg-slate-100,
+  .dark .bg-slate-200,
+  .dark .bg-slate-900 { background-color: #ffffff !important; }
+  .dark .text-slate-900,
+  .dark .text-slate-800,
+  .dark .text-slate-700,
+  .dark .text-slate-600,
+  .dark .text-slate-500 { color: #0f172a !important; }
+  .dark .border-slate-100,
+  .dark .border-slate-200,
+  .dark .border-slate-300 { border-color: #e2e8f0 !important; }
+}
 /* hmr-nudge 1793019766 */

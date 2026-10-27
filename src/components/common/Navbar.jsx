@@ -23,9 +23,11 @@ import {
   X,
   Bot,
   CalendarClock,
+  Search,
 } from 'lucide-react';
 import { formatShortDate, formatCurrency } from '../../utils/formatters';
 import { useCelebrationMood } from '../../hooks/useCelebrationMood';
+import { ThemeToggle } from './ThemeToggle';
 
 /**
  * Application top bar — two-tier layout.
@@ -39,7 +41,7 @@ import { useCelebrationMood } from '../../hooks/useCelebrationMood';
  * strip on top of the event switcher — ghost text through the translucent trigger and
  * clicks landing on the wrong control. A second row guarantees separation at any width.
  */
-export const Navbar = ({ currentTab, setCurrentTab, onOpenNewEvent, onOpenApiKey, onEditCurrentEvent }) => {
+export const Navbar = ({ currentTab, setCurrentTab, onOpenNewEvent, onOpenApiKey, onEditCurrentEvent, onOpenPalette }) => {
   const {
     events,
     activeEventId,
@@ -384,6 +386,25 @@ export const Navbar = ({ currentTab, setCurrentTab, onOpenNewEvent, onOpenApiKey
 
           {/* Right utility actions — uniform h-9 targets */}
           <div className="flex items-center gap-1.5 shrink-0">
+            {/* Command Palette — ⌘K / Ctrl+K */}
+            <button
+              type="button"
+              onClick={onOpenPalette}
+              title="Command palette — jump anywhere, search everything (Ctrl+K / ⌘K)"
+              aria-label="Open the command palette"
+              aria-keyshortcuts="Control+K Meta+K"
+              className="flex items-center gap-2 h-9 px-2.5 rounded-xl text-xs font-semibold text-slate-600 hover:text-slate-900 hover:bg-slate-100 border border-slate-200 bg-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+            >
+              <Search className="w-3.5 h-3.5" aria-hidden="true" />
+              <span className="hidden md:inline">Search</span>
+              <kbd
+                className="hidden lg:inline-flex items-center rounded-md border border-slate-200 bg-slate-50 px-1 py-0.5 text-[9px] font-bold text-slate-500"
+                aria-hidden="true"
+              >
+                ⌘K
+              </kbd>
+            </button>
+
             {/* AI Engine Status */}
             <button
               type="button"
@@ -432,6 +453,9 @@ export const Navbar = ({ currentTab, setCurrentTab, onOpenNewEvent, onOpenApiKey
             >
               <RotateCcw className="w-4 h-4" aria-hidden="true" />
             </button>
+
+            {/* Light / Dark mode */}
+            <ThemeToggle />
 
             {/* Mobile Hamburger Toggle */}
             <button
