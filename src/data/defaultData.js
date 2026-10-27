@@ -39,6 +39,32 @@ export const VENDOR_STATUSES = [
   { id: 'deposit_paid', label: 'Deposit Paid', color: 'bg-purple-50 text-purple-700 border-purple-200' },
 ];
 
+/* Guest list & RSVP model ----------------------------------------------- */
+
+export const RSVP_STATUSES = [
+  { id: 'invited', label: 'Invited', short: 'Awaiting', color: 'bg-slate-100 text-slate-700 border-slate-300', progress: 'bg-slate-300' },
+  { id: 'attending', label: 'Attending', short: 'Yes', color: 'bg-emerald-50 text-emerald-700 border-emerald-200', progress: 'bg-emerald-500' },
+  { id: 'maybe', label: 'Maybe', short: 'TBD', color: 'bg-amber-50 text-amber-700 border-amber-200', progress: 'bg-amber-400' },
+  { id: 'declined', label: 'Declined', short: 'No', color: 'bg-rose-50 text-rose-700 border-rose-200', progress: 'bg-rose-300' },
+];
+
+export const MEAL_OPTIONS = [
+  { id: 'standard', label: 'Standard', icon: '🍽️' },
+  { id: 'vegetarian', label: 'Vegetarian', icon: '🥗' },
+  { id: 'vegan', label: 'Vegan', icon: '🌱' },
+  { id: 'gluten-free', label: 'Gluten-Free', icon: '🌾' },
+  { id: 'kids', label: "Kids' Meal", icon: '🧒' },
+  { id: 'other', label: 'Other / Note', icon: '📝' },
+];
+
+export const GUEST_GROUPS = [
+  { id: 'family', label: 'Family', icon: '👨‍👩‍👧‍👦' },
+  { id: 'friends', label: 'Friends', icon: '🤗' },
+  { id: 'colleagues', label: 'Colleagues', icon: '💼' },
+  { id: 'vip', label: 'VIP / Honored', icon: '⭐' },
+  { id: 'vendors', label: 'Vendor Team', icon: '🎪' },
+];
+
 export const TIMELINE_PHASES = [
   { id: 'early', label: 'Early Planning (3+ Months Prior)' },
   { id: 'mid', label: 'Month Out (4-6 Weeks Prior)' },
