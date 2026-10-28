@@ -2,6 +2,12 @@
 
 > **An enterprise-grade, GenAI-powered planning platform** that helps users organize **weddings 💍, birthdays 🎂, and community celebrations 🤝** with **intelligent budgets, timelines, vendor directories, guest & seating management, day-of run sheets, photo memory walls, and an autonomous multi-agent workforce** — built on Next.js 16, TypeScript, and Tailwind CSS 4 with a server-side GLM engine (`z-ai-web-dev-sdk`), triple-tier fallback resilience, and 531 automated tests.
 
+[![Live Demo](https://img.shields.io/badge/Live_Demo-ecpsl.space--z.ai-7c3aed?style=for-the-badge&logo=vercel&logoColor=white)](https://ecpsl.space-z.ai/)
+[![GitHub Repo](https://img.shields.io/badge/GitHub-Repository-181717?style=for-the-badge&logo=github&logoColor=white)](https://github.com/saurabhmj11/Celebration-Planner-GenAI-Planning-Assistant)
+
+🔗 **Live Deployment**: [https://ecpsl.space-z.ai/](https://ecpsl.space-z.ai/)  
+📂 **Source Code**: [https://github.com/saurabhmj11/Celebration-Planner-GenAI-Planning-Assistant](https://github.com/saurabhmj11/Celebration-Planner-GenAI-Planning-Assistant)
+
 ---
 
 ## 🎯 Problem Statement Alignment
