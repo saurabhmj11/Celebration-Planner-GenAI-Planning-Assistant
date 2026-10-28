@@ -40,7 +40,6 @@ export const ApiKeyModal = ({ isOpen, onClose }) => {
     }, 30000);
 
     try {
-      console.log(`[ApiKeyModal] Testing Gemini API key with model ${GEMINI_MODEL}...`);
       // Use secure x-goog-api-key header instead of putting key in URL query params
       const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
       const res = await fetch(url, {
@@ -55,8 +54,6 @@ export const ApiKeyModal = ({ isOpen, onClose }) => {
         })
       });
 
-      console.log(`[ApiKeyModal] Model ${GEMINI_MODEL} responded with HTTP status ${res.status}`);
-
       if (res.ok) {
         setTestResult({
           success: true,
@@ -68,7 +65,6 @@ export const ApiKeyModal = ({ isOpen, onClose }) => {
       } else {
         const errData = await res.json().catch(() => ({}));
         const rawMessage = errData?.error?.message || `HTTP ${res.status}`;
-        console.error(`[ApiKeyModal] Test failed with status ${res.status}:`, errData?.error);
         
         const categorized = categorizeGeminiError({ status: res.status, message: rawMessage });
         setTestResult({
@@ -83,7 +79,6 @@ export const ApiKeyModal = ({ isOpen, onClose }) => {
       }
     } catch (err) {
       if (isTimeout) err.isTimeout = true;
-      console.error('[ApiKeyModal] Connection test exception:', err.message);
       const categorized = categorizeGeminiError(err);
       setTestResult({
         success: false,

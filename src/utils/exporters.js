@@ -23,7 +23,7 @@ export const GUEST_CSV_COLUMNS = [
 ];
 
 const RSVP_ALIASES = {
-  invited: 'invited', invited: 'invited', pending: 'invited', awaiting: 'invited',
+  invited: 'invited', pending: 'invited', awaiting: 'invited',
   sent: 'invited', waiting: 'invited', 'no response': 'invited',
   attending: 'attending', yes: 'attending', confirmed: 'attending',
   coming: 'attending', accepted: 'attending',
@@ -35,7 +35,7 @@ const RSVP_ALIASES = {
 const GROUP_ALIASES = {
   family: 'family', relatives: 'family',
   friends: 'friends', friend: 'friends',
-  colleagues: 'colleagues', work: 'colleagues', coworkers: 'colleagues', coworkers: 'colleagues',
+  colleagues: 'colleagues', work: 'colleagues', coworkers: 'colleagues',
   vip: 'vip', honored: 'vip', guestofhonor: 'vip',
   vendors: 'vendors', vendor: 'vendors', team: 'vendors',
 };

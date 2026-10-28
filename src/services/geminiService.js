@@ -46,8 +46,8 @@ function extractAndParseJSON(rawText) {
       if (extracted && typeof extracted === 'object') {
         return extracted;
       }
-    } catch (parseErr) {
-      console.error('[GeminiService] Extracted JSON parse failure:', parseErr.message);
+    } catch {
+      // Extracted block wasn't valid JSON; fall through to throw descriptive error below
     }
   }
 
@@ -205,7 +205,6 @@ export const geminiService = {
 
     // Case 1: User supplied their own Gemini key -> attempt a direct live Gemini API call
     if (cleanKey) {
-      console.log('[GeminiService] Initiating live Gemini API generation for event:', event?.title);
       try {
         const liveResult = await this.callGeminiApi({ event, customPrompt, apiKey: cleanKey, timeoutMs });
 
@@ -225,7 +224,6 @@ export const geminiService = {
           summary: liveResult.summary || `Personalized AI recommendations tailored for your ${event?.type || 'celebration'}.`,
         };
       } catch (err) {
-        console.error('[GeminiService] Live Gemini generation failed:', err.message);
         const errorInfo = categorizeGeminiError(err);
         const fallbackThemes = this.generateFallbackThemes(event, customPrompt);
 
@@ -246,7 +244,6 @@ export const geminiService = {
 
     // Case 2: Built-in server-side GenAI engine (z-ai-web-dev-sdk backend route)
     try {
-      console.log('[GeminiService] Requesting concepts from the built-in GenAI engine...');
       const builtinResult = await this.callBuiltinEngine({ event, customPrompt, timeoutMs });
 
       if (builtinResult.themes && builtinResult.themes.length > 0) {
@@ -259,12 +256,11 @@ export const geminiService = {
         };
       }
       throw new Error('The built-in AI engine returned no theme concepts.');
-    } catch (builtinErr) {
-      console.warn('[GeminiService] Built-in AI engine unavailable:', builtinErr.message);
+    } catch {
+      // Fall through to Case 3 offline engine
     }
 
     // Case 3: Smart Offline Recommendation Engine (zero latency, always available)
-    console.log('[GeminiService] Utilizing Smart Offline Recommendation Engine.');
     const fallbackThemes = this.generateFallbackThemes(event, customPrompt);
     return {
       success: true,
@@ -332,8 +328,6 @@ export const geminiService = {
     const model = GEMINI_MODEL;
     // Use secure x-goog-api-key header; never expose key in URL query parameter
     const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
-
-    console.log(`[GeminiService] Dispatching direct request to model: ${model} (timeout: ${timeoutMs / 1000}s)`);
 
     const promptText = `
 You are an elite celebration and luxury event designer.

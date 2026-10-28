@@ -66,12 +66,7 @@ async function runTask(task, payload, offlineFn) {
       model: result.model || 'GLM',
       data: result.data,
     };
-  } catch (err) {
-    if (err.name === 'AbortError') {
-      console.warn(`[aiAssist] ${task} timed out — using offline engine.`);
-    } else {
-      console.warn(`[aiAssist] ${task} failed (${err.message}) — using offline engine.`);
-    }
+  } catch {
     return {
       success: true,
       source: 'local-ai-engine',

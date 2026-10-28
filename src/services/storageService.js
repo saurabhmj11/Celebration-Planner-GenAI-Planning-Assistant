@@ -205,8 +205,7 @@ export const storageService = {
       }
       this.saveEvents(INITIAL_EVENTS);
       return INITIAL_EVENTS;
-    } catch (e) {
-      console.warn('Failed to load events from localStorage, using initial sample data', e);
+    } catch {
       return INITIAL_EVENTS;
     }
   },
@@ -215,10 +214,9 @@ export const storageService = {
     try {
       localStorage.setItem(STORAGE_KEYS.EVENTS, JSON.stringify(events));
       return true;
-    } catch (e) {
+    } catch {
       // Quota-exceeded is the common case (large photo walls). Signal the
       // caller so the UI can warn BEFORE the user loses recent work.
-      console.error('Error saving events to localStorage', e);
       return false;
     }
   },
@@ -239,8 +237,8 @@ export const storageService = {
   saveActiveEventId(id) {
     try {
       localStorage.setItem(STORAGE_KEYS.ACTIVE_ID, String(id).slice(0, 100));
-    } catch (e) {
-      console.error('Error saving active event id', e);
+    } catch {
+      // Silent catch on storage failure
     }
   },
 
@@ -273,8 +271,7 @@ export const storageService = {
       const normalized = normalizeCurrencyConfig(config);
       localStorage.setItem(STORAGE_KEYS.CURRENCY, JSON.stringify(normalized));
       return normalized;
-    } catch (e) {
-      console.error('Error saving currency config', e);
+    } catch {
       return { ...DEFAULT_CURRENCY_CONFIG };
     }
   },
@@ -286,8 +283,8 @@ export const storageService = {
       } else {
         localStorage.setItem(STORAGE_KEYS.API_KEY, key.trim().slice(0, 200));
       }
-    } catch (e) {
-      console.error('Error saving API key', e);
+    } catch {
+      // Silent catch on storage failure
     }
   },
 
@@ -296,8 +293,7 @@ export const storageService = {
       localStorage.setItem(STORAGE_KEYS.EVENTS, JSON.stringify(INITIAL_EVENTS));
       localStorage.setItem(STORAGE_KEYS.ACTIVE_ID, INITIAL_EVENTS[0].id);
       return INITIAL_EVENTS;
-    } catch (e) {
-      console.error('Failed resetting to sample data', e);
+    } catch {
       return INITIAL_EVENTS;
     }
   },
