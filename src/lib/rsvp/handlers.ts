@@ -5,10 +5,16 @@
  * so every input is Zod-validated, sanitized and rate-limited. The guest list
  * is NEVER exposed: lookup answers name queries server-side and returns only
  * matched names, and submissions are matched against the stored snapshot.
+ *
+ * Red-team hardening (attack report 2026-10-28):
+ *  - bodies are size-capped BEFORE parsing (V-1: memory DoS)
+ *  - per-TOKEN rate limits back the spoofable per-IP ones (V-2), capping both
+ *    guest-name enumeration through lookup floods and RSVP spam
  */
 import { NextResponse } from "next/server";
 
 import { checkRateLimit, getClientKey } from "@/lib/security/rateLimit";
+import { readCappedJsonBody } from "@/lib/security/bodyCap";
 import { sanitizeText } from "@/lib/security/sanitize";
 import { formatZodErrors } from "@/lib/validation/schemas";
 import {
@@ -33,6 +39,23 @@ export interface RsvpDb {
 
 const LOOKUP_RATE = { key: "rsvp:lookup", limit: 20, windowMs: 60_000 };
 const SUBMIT_RATE = { key: "rsvp:submit", limit: 12, windowMs: 60_000 };
+
+/**
+ * Per-TOKEN ceilings (V-2 fix) — x-forwarded-for is client-spoofable, so a
+ * second limiter keyed on the RSVP token bounds each link's abuse no matter
+ * how many fake "IPs" rotate behind it. Lookup 40/min still lets a real
+ * household search every family member; enumeration at scale needs far more.
+ */
+const TOKEN_LOOKUP_RATE = { key: "rsvp:lookup-t", limit: 40, windowMs: 60_000 };
+const TOKEN_SUBMIT_RATE = { key: "rsvp:submit-t", limit: 30, windowMs: 60_000 };
+
+/** Small JSON envelopes — 8KB is 10× the schema maximum (V-1 fix). */
+const RSVP_MAX_BODY_CHARS = 8_000;
+
+/** Rate-limit a token-scoped request by its token (second, unspoofable key). */
+function checkTokenRateLimit(token: string, opts: { key: string; limit: number; windowMs: number }) {
+  return checkRateLimit(`t:${token}`, opts);
+}
 
 function jsonError(message: string, status: number, fields?: Record<string, string>) {
   return NextResponse.json(
@@ -75,16 +98,15 @@ export function createRsvpLookupHandler(db: RsvpDb, now: () => Date = () => new 
     const rate = checkRateLimit(getClientKey(request), LOOKUP_RATE);
     if (!rate.allowed) return jsonError("Too many lookups. Please wait a moment.", 429);
 
-    let body: unknown;
-    try {
-      body = JSON.parse((await request.text()) || "{}");
-    } catch {
-      return jsonError("Invalid JSON body", 400);
-    }
-    const parsed = rsvpLookupSchema.safeParse(body);
+    const body = await readCappedJsonBody(request, RSVP_MAX_BODY_CHARS);
+    if (!body.ok) return jsonError(body.message, body.status);
+    const parsed = rsvpLookupSchema.safeParse(body.value);
     if (!parsed.success) {
       return jsonError("Validation failed", 400, formatZodErrors(parsed.error));
     }
+
+    const tokenRate = checkTokenRateLimit(parsed.data.token, TOKEN_LOOKUP_RATE);
+    if (!tokenRate.allowed) return jsonError("Too many lookups. Please wait a moment.", 429);
 
     const event = await findEventByToken(db, parsed.data.token);
     if (!event) return jsonError("This RSVP link is not valid.", 404);
@@ -133,16 +155,15 @@ export function createRsvpSubmitHandler(db: RsvpDb, now: () => Date = () => new 
     const rate = checkRateLimit(getClientKey(request), SUBMIT_RATE);
     if (!rate.allowed) return jsonError("Too many submissions. Please wait a moment.", 429);
 
-    let body: unknown;
-    try {
-      body = JSON.parse((await request.text()) || "{}");
-    } catch {
-      return jsonError("Invalid JSON body", 400);
-    }
-    const parsed = rsvpSubmitSchema.safeParse(body);
+    const body = await readCappedJsonBody(request, RSVP_MAX_BODY_CHARS);
+    if (!body.ok) return jsonError(body.message, body.status);
+    const parsed = rsvpSubmitSchema.safeParse(body.value);
     if (!parsed.success) {
       return jsonError("Validation failed", 400, formatZodErrors(parsed.error));
     }
+
+    const tokenRate = checkTokenRateLimit(parsed.data.token, TOKEN_SUBMIT_RATE);
+    if (!tokenRate.allowed) return jsonError("Too many submissions. Please wait a moment.", 429);
 
     const event = await findEventByToken(db, parsed.data.token);
     if (!event) return jsonError("This RSVP link is not valid.", 404);

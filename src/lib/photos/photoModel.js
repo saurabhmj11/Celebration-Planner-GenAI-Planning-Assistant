@@ -83,6 +83,28 @@ export function validatePhotoDataUrl(dataUrl) {
 }
 
 /**
+ * Guest-facing upload validation (red-team fix V-4).
+ *
+ * Guests contribute camera photos, never vector art — so the public album
+ * accepts RASTER formats only (jpeg/png/gif/webp). The general allowlist
+ * keeps svg+xml for the app's own deterministic seed cards (they are
+ * template-built, not attacker-controlled), but a denylist can never be
+ * exhaustive against markup tricks like `onmouseover=` or `<animate>`, so
+ * for untrusted uploaders SVG is rejected outright instead of scanned.
+ * defence-in-depth: even though scripts are inert inside <img>, storing
+ * arbitrary guest-authored markup is one refactor away from stored XSS.
+ */
+const RASTER_MIME_ALLOWLIST = new Set(['jpeg', 'jpg', 'png', 'gif', 'webp']);
+
+export function validateGuestPhotoDataUrl(dataUrl) {
+  const cleaned = validatePhotoDataUrl(dataUrl);
+  if (!cleaned) return null;
+  const commaIdx = cleaned.indexOf(',');
+  const mime = cleaned.slice(11, commaIdx).split(';')[0].toLowerCase();
+  return RASTER_MIME_ALLOWLIST.has(mime) ? cleaned : null;
+}
+
+/**
  * Build photo metadata from a validated data URL.
  * The id is minted by the caller (context) so bulk adds stay collision-proof.
  */
