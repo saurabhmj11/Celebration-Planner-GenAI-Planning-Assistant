@@ -69,7 +69,7 @@ export function processImageFile(file, { maxDim = PHOTO_MAX_DIMENSION, quality =
             dataUrl = canvas.toDataURL('image/jpeg', Math.max(0.45, quality - 0.2));
           }
           resolve(validatePhotoDataUrl(dataUrl) ? dataUrl : null);
-        } catch {
+        } catch (_err) {
           resolve(null);
         }
       };

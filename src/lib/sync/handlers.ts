@@ -119,7 +119,7 @@ export function parseSnapshotJson(snapshot: string): Record<string, unknown> | n
   let obj: unknown;
   try {
     obj = JSON.parse(snapshot);
-  } catch {
+  } catch (_err) {
     return null;
   }
   if (typeof obj !== "object" || obj === null || Array.isArray(obj)) return null;
@@ -260,7 +260,7 @@ export function createSyncPushHandler(db: SyncDb) {
         updatedAt: row.updatedAt.toISOString(),
         responseCount,
       });
-    } catch {
+    } catch (_err) {
       return jsonError("Invalid JSON body", 400);
     }
   };
@@ -324,7 +324,7 @@ export function createSyncDeleteHandler(db: SyncDb) {
         where: { userId_localId: { userId: user.userId, localId } },
       });
       return NextResponse.json({ ok: true });
-    } catch {
+    } catch (_err) {
       return jsonError("This event is not synced to your cloud.", 404);
     }
   };
@@ -438,7 +438,7 @@ export function createAckPhotosHandler(db: SyncDb) {
         where: { eventId: row.id, id: { in: parsed.data.photoIds } },
       });
       return NextResponse.json({ ok: true, deleted: result.count });
-    } catch {
+    } catch (_err) {
       return jsonError("Invalid JSON body", 400);
     }
   };
@@ -464,7 +464,7 @@ export function createAckResponsesHandler(db: SyncDb) {
         where: { eventId: row.id, guestKey: { in: parsed.data.guestKeys } },
       });
       return NextResponse.json({ ok: true, deleted: result.count });
-    } catch {
+    } catch (_err) {
       return jsonError("Invalid JSON body", 400);
     }
   };

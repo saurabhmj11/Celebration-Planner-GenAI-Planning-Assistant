@@ -62,7 +62,7 @@ export function extractAndParseJSON(rawText: string): Record<string, unknown> {
   try {
     const direct = JSON.parse(text);
     if (direct && typeof direct === "object") return direct;
-  } catch {
+  } catch (_err) {
     // fall through
   }
 
@@ -72,7 +72,7 @@ export function extractAndParseJSON(rawText: string): Record<string, unknown> {
     try {
       const extracted = JSON.parse(balanced);
       if (extracted && typeof extracted === "object") return extracted;
-    } catch {
+    } catch (_err) {
       // fall through
     }
   }
@@ -83,7 +83,7 @@ export function extractAndParseJSON(rawText: string): Record<string, unknown> {
     try {
       const extracted = JSON.parse(match[0]);
       if (extracted && typeof extracted === "object") return extracted;
-    } catch {
+    } catch (_err) {
       // fall through
     }
   }

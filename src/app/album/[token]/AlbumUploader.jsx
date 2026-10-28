@@ -54,7 +54,7 @@ export function AlbumUploader({ token, eventTitle }) {
       const data = await res.json();
       setAlbum(data);
       setLoadError(false);
-    } catch {
+    } catch (_err) {
       setLoadError(true);
     }
   }, [token]);
@@ -127,7 +127,7 @@ export function AlbumUploader({ token, eventTitle }) {
           });
           if (res.ok) sent += 1;
           else failed += 1;
-        } catch {
+        } catch (_err) {
           failed += 1;
         }
         setUploadState((prev) => ({ ...prev, done: (prev?.done || 0) + 1 }));
@@ -149,7 +149,7 @@ export function AlbumUploader({ token, eventTitle }) {
               colors: ['#f43f5e', '#a855f7', '#f59e0b', '#10b981', '#3b82f6'],
             });
           }
-        } catch {
+        } catch (_err) {
           /* confetti is decorative */
         }
       }

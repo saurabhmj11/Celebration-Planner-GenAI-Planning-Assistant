@@ -230,7 +230,7 @@ export const EventFormModal = ({ isOpen, onClose, eventToEdit = null }) => {
         filled.forEach((f) => delete next[f]);
         return next;
       });
-    } catch {
+    } catch (_err) {
       setIntakeResult(null);
       setIntakeError(
         'The AI engine could not read that description. Try rephrasing with more detail, or fill the form manually.'

@@ -78,7 +78,7 @@ export function createAssistPostHandler(runEngine: RunEngine) {
       let jsonBody: unknown;
       try {
         jsonBody = rawBody ? JSON.parse(rawBody) : {};
-      } catch {
+      } catch (_err) {
         return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
       }
 

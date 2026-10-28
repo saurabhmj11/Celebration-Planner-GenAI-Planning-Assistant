@@ -73,7 +73,7 @@ export const RemindersBell = ({ setCurrentTab }) => {
     if (typeof window === 'undefined') return {};
     try {
       return JSON.parse(window.localStorage.getItem(MUTED_STORAGE_KEY) || '{}');
-    } catch {
+    } catch (_err) {
       return {};
     }
   });
@@ -123,7 +123,7 @@ export const RemindersBell = ({ setCurrentTab }) => {
     setMuted(next);
     try {
       window.localStorage.setItem(MUTED_STORAGE_KEY, JSON.stringify(next));
-    } catch {
+    } catch (_err) {
       /* storage full/blocked — snooze still applies for this session */
     }
   }, []);

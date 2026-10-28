@@ -205,7 +205,8 @@ export const storageService = {
       }
       this.saveEvents(INITIAL_EVENTS);
       return INITIAL_EVENTS;
-    } catch {
+    } catch (err) {
+      // Fall back to initial sample events if JSON parsing or localStorage read fails
       return INITIAL_EVENTS;
     }
   },
@@ -214,9 +215,9 @@ export const storageService = {
     try {
       localStorage.setItem(STORAGE_KEYS.EVENTS, JSON.stringify(events));
       return true;
-    } catch {
-      // Quota-exceeded is the common case (large photo walls). Signal the
-      // caller so the UI can warn BEFORE the user loses recent work.
+    } catch (err) {
+      // Quota-exceeded is the common case (large photo walls). Signal false
+      // to the caller so the UI can warn BEFORE the user loses recent work.
       return false;
     }
   },
@@ -229,7 +230,7 @@ export const storageService = {
         return activeId;
       }
       return events.length > 0 ? events[0].id : null;
-    } catch {
+    } catch (err) {
       return INITIAL_EVENTS[0]?.id || null;
     }
   },
@@ -237,8 +238,8 @@ export const storageService = {
   saveActiveEventId(id) {
     try {
       localStorage.setItem(STORAGE_KEYS.ACTIVE_ID, String(id).slice(0, 100));
-    } catch {
-      // Silent catch on storage failure
+    } catch (err) {
+      // Non-fatal: storage quota or private-browsing restrictions
     }
   },
 
@@ -250,7 +251,7 @@ export const storageService = {
       const localKey = localStorage.getItem(STORAGE_KEYS.API_KEY);
       if (localKey && localKey.trim()) return localKey.trim();
       return '';
-    } catch {
+    } catch (err) {
       return '';
     }
   },
@@ -261,7 +262,7 @@ export const storageService = {
       const raw = localStorage.getItem(STORAGE_KEYS.CURRENCY);
       if (!raw) return { ...DEFAULT_CURRENCY_CONFIG };
       return normalizeCurrencyConfig(JSON.parse(raw));
-    } catch {
+    } catch (err) {
       return { ...DEFAULT_CURRENCY_CONFIG };
     }
   },
@@ -271,7 +272,7 @@ export const storageService = {
       const normalized = normalizeCurrencyConfig(config);
       localStorage.setItem(STORAGE_KEYS.CURRENCY, JSON.stringify(normalized));
       return normalized;
-    } catch {
+    } catch (err) {
       return { ...DEFAULT_CURRENCY_CONFIG };
     }
   },
@@ -283,8 +284,8 @@ export const storageService = {
       } else {
         localStorage.setItem(STORAGE_KEYS.API_KEY, key.trim().slice(0, 200));
       }
-    } catch {
-      // Silent catch on storage failure
+    } catch (err) {
+      // Non-fatal: storage quota or private-browsing restrictions
     }
   },
 
@@ -293,7 +294,7 @@ export const storageService = {
       localStorage.setItem(STORAGE_KEYS.EVENTS, JSON.stringify(INITIAL_EVENTS));
       localStorage.setItem(STORAGE_KEYS.ACTIVE_ID, INITIAL_EVENTS[0].id);
       return INITIAL_EVENTS;
-    } catch {
+    } catch (err) {
       return INITIAL_EVENTS;
     }
   },

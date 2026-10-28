@@ -81,7 +81,7 @@ export const CloudSyncProvider = ({ children }) => {
       if (!res.ok) return;
       const data = await res.json();
       setCloudEvents(Array.isArray(data.events) ? data.events : []);
-    } catch {
+    } catch (_err) {
       /* offline — keep the last known list */
     }
   }, []);
@@ -96,7 +96,7 @@ export const CloudSyncProvider = ({ children }) => {
         if (cancelled) return;
         setUser(data?.user || null);
         if (data?.user) await refreshCloudList();
-      } catch {
+      } catch (_err) {
         /* offline */
       } finally {
         if (!cancelled) setIsSessionReady(true);
@@ -122,7 +122,7 @@ export const CloudSyncProvider = ({ children }) => {
         await refreshCloudList();
         showToast(`Welcome aboard, ${data.user?.name || data.user?.email}!`, 'success');
         return { ok: true, user: data.user };
-      } catch {
+      } catch (_err) {
         return { ok: false, error: 'Network error — please try again.' };
       }
     },
@@ -144,7 +144,7 @@ export const CloudSyncProvider = ({ children }) => {
         await refreshCloudList();
         showToast('Signed in to cloud sync.', 'success');
         return { ok: true, user: data.user };
-      } catch {
+      } catch (_err) {
         return { ok: false, error: 'Network error — please try again.' };
       }
     },
@@ -154,7 +154,7 @@ export const CloudSyncProvider = ({ children }) => {
   const signOut = useCallback(async () => {
     try {
       await authFetch('/api/auth/logout', { method: 'POST' });
-    } catch {
+    } catch (_err) {
       /* best effort */
     }
     setUser(null);
@@ -204,7 +204,7 @@ export const CloudSyncProvider = ({ children }) => {
           return next;
         });
         return { ok: true, data };
-      } catch {
+      } catch (_err) {
         return { ok: false, error: 'Network error while syncing.' };
       }
     },
@@ -237,7 +237,7 @@ export const CloudSyncProvider = ({ children }) => {
               `/api/sync/events/${encodeURIComponent(event.id)}/responses/ack`,
               { method: 'POST', body: JSON.stringify({ guestKeys: responses.map((r) => r.guestKey) }) }
             );
-          } catch {
+          } catch (_err) {
             /* ack is best-effort; re-import is idempotent */
           }
         } else {
@@ -245,7 +245,7 @@ export const CloudSyncProvider = ({ children }) => {
         }
         await refreshCloudList();
         return { ok: true, imported: responses.length, summary };
-      } catch {
+      } catch (_err) {
         return { ok: false, error: 'Network error while syncing.' };
       } finally {
         setSyncingIds((prev) => {
@@ -286,7 +286,7 @@ export const CloudSyncProvider = ({ children }) => {
         const id = current.some((e) => e.id === localId) ? makeId('event') : localId;
         const restored = restoreCloudEvent({ ...snapshot, id });
         return restored ? { ok: true, mode: 'added' } : { ok: false, error: 'Snapshot could not be restored.' };
-      } catch {
+      } catch (_err) {
         return { ok: false, error: 'Network error while restoring.' };
       }
     },
@@ -303,7 +303,7 @@ export const CloudSyncProvider = ({ children }) => {
         setCloudEvents((prev) => prev.filter((c) => c.localId !== localId));
         showToast('Removed from your cloud. This device keeps its copy.', 'info');
         return { ok: true };
-      } catch {
+      } catch (_err) {
         return { ok: false, error: 'Network error.' };
       }
     },
@@ -326,7 +326,7 @@ export const CloudSyncProvider = ({ children }) => {
           prev.map((c) => (c.localId === event.id ? { ...c, hasRsvpToken: true } : c))
         );
         return { ok: true, url: data.url, token: data.token };
-      } catch {
+      } catch (_err) {
         return { ok: false, error: 'Network error while creating the link.' };
       }
     },
@@ -349,7 +349,7 @@ export const CloudSyncProvider = ({ children }) => {
           prev.map((c) => (c.localId === event.id ? { ...c, hasAlbumToken: true } : c))
         );
         return { ok: true, url: data.url, token: data.token };
-      } catch {
+      } catch (_err) {
         return { ok: false, error: 'Network error while creating the link.' };
       }
     },
@@ -420,7 +420,7 @@ export const CloudSyncProvider = ({ children }) => {
               `/api/sync/events/${encodeURIComponent(event.id)}/photos/ack`,
               { method: 'POST', body: JSON.stringify({ photoIds: importable.map((p) => p.id) }) }
             );
-          } catch {
+          } catch (_err) {
             /* ack is best-effort; re-import is harmless (photos just re-appear) */
           }
         }
@@ -433,7 +433,7 @@ export const CloudSyncProvider = ({ children }) => {
         );
         await refreshCloudList();
         return { ok: true, imported: added, remaining: skipped };
-      } catch {
+      } catch (_err) {
         return { ok: false, error: 'Network error while collecting photos.' };
       }
     },

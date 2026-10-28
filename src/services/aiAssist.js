@@ -66,7 +66,8 @@ async function runTask(task, payload, offlineFn) {
       model: result.model || 'GLM',
       data: result.data,
     };
-  } catch {
+  } catch (_err) {
+    // Graceful fallback: seamless degradation to offline heuristic engine
     return {
       success: true,
       source: 'local-ai-engine',

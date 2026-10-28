@@ -85,7 +85,7 @@ export function RsvpForm({ token, closed, deadline, eventTitle }) {
         return;
       }
       setMatches(Array.isArray(data.matches) ? data.matches : []);
-    } catch {
+    } catch (_err) {
       setError('Network error — please try again.');
     } finally {
       setLookingUp(false);
@@ -148,10 +148,10 @@ export function RsvpForm({ token, closed, deadline, eventTitle }) {
             colors: ['#f43f5e', '#a855f7', '#f59e0b', '#10b981', '#3b82f6'],
           });
         }
-      } catch {
+      } catch (_err) {
         /* confetti is decorative */
       }
-    } catch {
+    } catch (_err) {
       setError('Network error — please try again.');
     } finally {
       setSubmitting(false);

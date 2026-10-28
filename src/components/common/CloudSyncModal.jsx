@@ -50,7 +50,7 @@ const relTime = (iso) => {
     if (hours < 24) return `${hours}h ago`;
     const days = Math.round(hours / 24);
     return days < 30 ? `${days}d ago` : new Date(iso).toLocaleDateString();
-  } catch {
+  } catch (_err) {
     return '';
   }
 };

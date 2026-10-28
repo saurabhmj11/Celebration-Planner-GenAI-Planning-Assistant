@@ -77,7 +77,7 @@ export const EventProvider = ({ children }) => {
         origin: { y: 0.6 },
         colors: ['#8b5cf6', '#ec4899', '#f59e0b', '#10b981', '#3b82f6']
       });
-    } catch {
+    } catch (_err) {
       // safe fallback
     }
   }, []);

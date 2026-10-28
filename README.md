@@ -138,7 +138,7 @@ The application underwent rigorous red-team penetration testing and security har
 - **Concurrency & Race-Condition Queues**: Server-side capacity validation uses an in-process serial execution queue (`runExclusive`) to eliminate concurrency race conditions on capped collections (e.g., preventing album overflow beyond 60 photos during simultaneous burst uploads).
 - **Guest SVG Execution Prevention**: Public photo contributions strictly enforce raster formats (JPEG, PNG, WebP, GIF), blocking SVG uploads entirely to eliminate SVG-based XSS vectors.
 - **Strict Anti-Hallucination Normalization**: All GenAI outputs pass through strict Zod schemas and normalizers that clamp dates into event runways, rescale percentages to 100%, and discard ungrounded venue or guest IDs.
-- **Security Headers**: Standard enforcement of `X-Frame-Options`, `X-Content-Type-Options`, `Referrer-Policy`, and `Permissions-Policy`.
+- **Security Headers**: Standard enforcement of `Content-Security-Policy` (CSP), `X-Frame-Options`, `X-Content-Type-Options`, `Referrer-Policy`, and `Permissions-Policy`.
 
 ---
 

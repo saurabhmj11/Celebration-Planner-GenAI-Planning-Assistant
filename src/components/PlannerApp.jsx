@@ -112,7 +112,7 @@ const MainAppContent = () => {
     let muted = {};
     try {
       muted = JSON.parse(window.localStorage.getItem(MUTED_STORAGE_KEY) || '{}');
-    } catch {
+    } catch (_err) {
       muted = {};
     }
     const todayDate = new Date();

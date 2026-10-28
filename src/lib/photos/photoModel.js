@@ -69,7 +69,7 @@ export function validatePhotoDataUrl(dataUrl) {
     const bodies = [dataUrl.toLowerCase()];
     try {
       bodies.push(decodeURIComponent(dataUrl).toLowerCase());
-    } catch {
+    } catch (_err) {
       // Malformed percent-encoding — the raw form is still scanned.
     }
     for (const body of bodies) {

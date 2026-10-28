@@ -95,7 +95,7 @@ export const InvitationStudio = ({ onBackToList }) => {
               color: { dark: '#312e81', light: '#ffffff' },
             })
           );
-        } catch {
+        } catch (_err) {
           setQrDataUrl('');
         }
       } else if (res.error) {
@@ -112,7 +112,7 @@ export const InvitationStudio = ({ onBackToList }) => {
       setLinkCopied(true);
       setTimeout(() => setLinkCopied(false), 2400);
       showToast('RSVP link copied — send it to your guests!', 'success');
-    } catch {
+    } catch (_err) {
       showToast('Copy failed — select the link text and copy manually.', 'error');
     }
   };
@@ -152,7 +152,7 @@ export const InvitationStudio = ({ onBackToList }) => {
           : 'Live AI was unavailable — the offline writer drafted a version you can edit.',
         result.source === 'live-ai' ? 'success' : 'info'
       );
-    } catch {
+    } catch (_err) {
       showToast('Could not draft the invitation — please try again.', 'error');
     } finally {
       setIsGenerating(false);
@@ -176,7 +176,7 @@ export const InvitationStudio = ({ onBackToList }) => {
     try {
       await navigator.clipboard.writeText(text);
       showToast('Invitation text copied — paste it into any message or email.', 'success');
-    } catch {
+    } catch (_err) {
       showToast('Copy failed — select the text manually and copy.', 'info');
     }
   };

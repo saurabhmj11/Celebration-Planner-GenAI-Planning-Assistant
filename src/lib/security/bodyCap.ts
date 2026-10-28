@@ -44,7 +44,7 @@ export async function readCappedJsonBody(
   if (!raw) return { ok: true, value: {} };
   try {
     return { ok: true, value: JSON.parse(raw) };
-  } catch {
+  } catch (_err) {
     return { ok: false, status: 400, message: "Invalid JSON body" };
   }
 }

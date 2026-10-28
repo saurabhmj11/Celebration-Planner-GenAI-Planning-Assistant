@@ -76,7 +76,7 @@ export function VendorAI() {
         estCost: selectedVendor.cost || undefined,
       });
       setInquiry(res);
-    } catch {
+    } catch (_err) {
       setInquiry({ data: null, error: 'Could not draft the inquiry. Please retry.' });
     } finally {
       setInquiryLoading(false);
@@ -91,7 +91,7 @@ export function VendorAI() {
       setCopied(true);
       showToast('Inquiry copied to clipboard!', 'success');
       setTimeout(() => setCopied(false), 2500);
-    } catch {
+    } catch (_err) {
       showToast('Copy failed — select the text manually.', 'error');
     }
   };

@@ -37,7 +37,7 @@ export function normalizeImageUrl(url) {
   try {
     const parsed = new URL(trimmed);
     return parsed.protocol === 'http:' || parsed.protocol === 'https:' ? parsed.toString() : '';
-  } catch {
+  } catch (_err) {
     return '';
   }
 }

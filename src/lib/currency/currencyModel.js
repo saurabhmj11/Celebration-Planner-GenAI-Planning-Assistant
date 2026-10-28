@@ -103,7 +103,7 @@ export function formatMoney(usd, cfg = null) {
       currency: config.code,
       maximumFractionDigits: 0,
     }).format(Math.round(convertAmount(amount, config)));
-  } catch {
+  } catch (_err) {
     // Unknown currency code (shouldn't happen post-normalize) — degrade to USD.
     return `$${Math.round(amount).toLocaleString('en-US')}`;
   }

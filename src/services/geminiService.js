@@ -34,7 +34,7 @@ function extractAndParseJSON(rawText) {
     if (directParsed && typeof directParsed === 'object') {
       return directParsed;
     }
-  } catch {
+  } catch (_err) {
     // Continue to regex extraction
   }
 
@@ -46,7 +46,7 @@ function extractAndParseJSON(rawText) {
       if (extracted && typeof extracted === 'object') {
         return extracted;
       }
-    } catch {
+    } catch (_err) {
       // Extracted block wasn't valid JSON; fall through to throw descriptive error below
     }
   }
@@ -256,7 +256,7 @@ export const geminiService = {
         };
       }
       throw new Error('The built-in AI engine returned no theme concepts.');
-    } catch {
+    } catch (_builtinErr) {
       // Fall through to Case 3 offline engine
     }
 

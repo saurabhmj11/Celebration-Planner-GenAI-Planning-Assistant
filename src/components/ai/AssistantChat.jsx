@@ -111,7 +111,7 @@ export function AssistantChat() {
       } else {
         setSuggestions(STARTER_PROMPTS);
       }
-    } catch {
+    } catch (_err) {
       setMessages((prev) => [
         ...prev,
         { role: 'assistant', text: 'Sorry — something went wrong on my side. Please try again.', source: 'error' },

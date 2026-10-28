@@ -99,7 +99,7 @@ export const PhotoWall = () => {
               color: { dark: '#86198f', light: '#ffffff' },
             })
           );
-        } catch {
+        } catch (_err) {
           setQrDataUrl('');
         }
       } else if (res.error) {
@@ -116,7 +116,7 @@ export const PhotoWall = () => {
       setLinkCopied(true);
       setTimeout(() => setLinkCopied(false), 2400);
       showToast('Album link copied — send it to your guests!', 'success');
-    } catch {
+    } catch (_err) {
       showToast('Copy failed — select the link text and copy manually.', 'error');
     }
   };
