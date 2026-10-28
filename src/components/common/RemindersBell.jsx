@@ -9,7 +9,6 @@ import {
   muteKeyFor,
   countBadge,
   countSeverities,
-  remindersToastText,
   toDateKey,
   MUTED_STORAGE_KEY,
 } from '../../lib/reminders/reminderModel';

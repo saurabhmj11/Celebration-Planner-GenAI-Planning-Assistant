@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import { createPortal } from 'react-dom';
 import { useEventContext } from '../../context/EventContext';
 import { RunSheetPanel } from './RunSheetPanel';
 import { SeatingChartPanel } from './SeatingChartPanel';

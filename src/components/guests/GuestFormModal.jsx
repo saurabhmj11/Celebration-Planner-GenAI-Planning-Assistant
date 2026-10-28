@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useModalFocus } from '../../hooks/useModalFocus';
 import { useEventContext } from '../../context/EventContext';
 import { RSVP_STATUSES, MEAL_OPTIONS, GUEST_GROUPS } from '../../data/defaultData';
-import { X, UserPlus, User, Mail, Phone, Users, UtensilsCrossed, FileText, CheckCircle2 } from 'lucide-react';
+import { X, UserPlus, Mail, Phone, Users, UtensilsCrossed, FileText, CheckCircle2 } from 'lucide-react';
 
 /**
  * Add / edit a guest on the active event's list. Mirrors the VendorFormModal
